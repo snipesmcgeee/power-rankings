@@ -40,6 +40,7 @@ jobs:
           python <<'PYEOF'
           import json
           import os
+          import urllib.error
           import urllib.request
 
           import numpy as np
@@ -81,7 +82,13 @@ jobs:
 
           url = f"https://github.com/nflverse/nflverse-data/releases/download/pbp/play_by_play_{YEAR}.parquet"
           local = f"_pbp_{YEAR}.parquet"
-          urllib.request.urlretrieve(url, local)
+          try:
+              urllib.request.urlretrieve(url, local)
+          except urllib.error.HTTPError as e:
+              if e.code == 404:
+                  print(f"No play-by-play file for {YEAR} yet (404) -- nothing to update.")
+                  raise SystemExit(0)
+              raise
           d = pd.read_parquet(local, columns=[
               "game_id", "qtr", "game_seconds_remaining", "quarter_seconds_remaining",
               "home_wp", "result", "home_team", "away_team", "week", "season_type",
