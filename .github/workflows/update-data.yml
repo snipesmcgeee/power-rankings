@@ -1,0 +1,162 @@
+name: Update NFL season data
+
+on:
+  schedule:
+    - cron: "0 9 * * 2"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install pandas pyarrow
+
+      - name: Determine current NFL season
+        id: season
+        run: |
+          MONTH=$(date -u +%m)
+          YEAR=$(date -u +%Y)
+          if [ "$MONTH" -le 2 ]; then
+            SEASON=$((YEAR - 1))
+          else
+            SEASON=$YEAR
+          fi
+          echo "season=$SEASON" >> "$GITHUB_OUTPUT"
+
+      - name: Rebuild current season and update data.json
+        env:
+          SEASON: ${{ steps.season.outputs.season }}
+        run: |
+          python <<'PYEOF'
+          import json
+          import os
+          import urllib.request
+
+          import numpy as np
+          import pandas as pd
+
+          YEAR = int(os.environ["SEASON"])
+
+          W = json.loads(r'''{"midpoints": [29.9995, 90.0, 150.0, 210.0, 270.0, 330.0, 390.0, 450.0, 510.0, 570.0, 630.0, 690.0, 750.0, 810.0, 870.0, 930.0, 990.0, 1050.0, 1110.0, 1170.0, 1230.0, 1290.0, 1350.0, 1410.0, 1470.0, 1530.0, 1590.0, 1650.0, 1710.0, 1770.0, 1830.0, 1890.0, 1950.0, 2010.0, 2070.0, 2130.0, 2190.0, 2250.0, 2310.0, 2370.0, 2430.0, 2490.0, 2550.0, 2610.0, 2670.0, 2730.0, 2790.0, 2850.0, 2910.0, 2970.0, 3030.0, 3090.0, 3150.0, 3210.0, 3270.0, 3330.0, 3390.0, 3450.0, 3510.0, 3570.0], "weight_curve": [0.0, 0.0913644789763823, 0.1389647321502662, 0.14230829975557202, 0.2240405906422563, 0.25598329532071823, 0.28474168624396873, 0.2879373861805111, 0.32449832380125027, 0.3566090124946863, 0.372918332371865, 0.384522991518541, 0.39928042881717885, 0.4183059573581745, 0.42574165611242426, 0.45469662159201646, 0.4508949598810931, 0.4660106104742923, 0.4755861693644839, 0.47368170191569386, 0.516778697337931, 0.5087328020688628, 0.5525783378445307, 0.5302285612333729, 0.5507198532772509, 0.5591492242629302, 0.5970372861174904, 0.623479493763435, 0.6475507350820685, 0.6682858207436501, 0.6909824452671709, 0.6590534687672629, 0.6862825141810119, 0.7181000617110596, 0.7080506129939522, 0.721954621235993, 0.7322911598456805, 0.758881321318553, 0.7575179602291656, 0.7738342253369436, 0.7742987370642067, 0.781736688187007, 0.8057863225632148, 0.8097298743804916, 0.8157169499422382, 0.839894033806015, 0.8441461774645508, 0.8482924799897709, 0.8570708117003318, 0.885934026222837, 0.8834246858593905, 0.8846350064411509, 0.9163058814655264, 0.9411610935425426, 0.9517013206858203, 0.9727535298039581, 0.9636428371781984, 0.9761797172380904, 0.9749799614746073, 1.0], "ot_weight": 0.44648085168267615}''')
+          MIDPOINTS = np.array(W["midpoints"])
+          WEIGHT_CURVE = np.array(W["weight_curve"])
+          OT_WEIGHT = W["ot_weight"]
+
+          def weighted_split(g):
+              g = g.dropna(subset=["home_wp", "game_seconds_remaining"]).copy()
+              reg_part = g[g.qtr <= 4].sort_values("game_seconds_remaining", ascending=False)
+              reg_part["t"] = 3600 - reg_part["game_seconds_remaining"]
+              ot_part = g[g.qtr >= 5].sort_values("game_seconds_remaining", ascending=False)
+              x_list, y_list, w_list = [], [], []
+              if len(reg_part):
+                  x_list.append(reg_part["t"].values)
+                  y_list.append(reg_part["home_wp"].values)
+                  w_list.append(np.interp(reg_part["t"].values, MIDPOINTS, WEIGHT_CURVE))
+              if len(ot_part):
+                  ot_part = ot_part.copy()
+                  ot_part["t"] = 3600 + (ot_part["quarter_seconds_remaining"].max() - ot_part["quarter_seconds_remaining"])
+                  x_list.append(ot_part["t"].values)
+                  y_list.append(ot_part["home_wp"].values)
+                  w_list.append(np.full(len(ot_part), OT_WEIGHT))
+              x = np.concatenate(x_list); y = np.concatenate(y_list); w = np.concatenate(w_list)
+              order = np.argsort(x); x, y, w = x[order], y[order], w[order]
+              return np.trapezoid(w * y, x) / np.trapezoid(w, x)
+
+          def apply_failsafe(home_pts, away_pts, margin):
+              if margin > 0 and home_pts < 50.1:
+                  return 50.1, 49.9
+              if margin < 0 and away_pts < 50.1:
+                  return 49.9, 50.1
+              return home_pts, away_pts
+
+          url = f"https://github.com/nflverse/nflverse-data/releases/download/pbp/play_by_play_{YEAR}.parquet"
+          local = f"_pbp_{YEAR}.parquet"
+          urllib.request.urlretrieve(url, local)
+          d = pd.read_parquet(local, columns=[
+              "game_id", "qtr", "game_seconds_remaining", "quarter_seconds_remaining",
+              "home_wp", "result", "home_team", "away_team", "week", "season_type",
+          ])
+          os.remove(local)
+
+          season = d[(d.season_type == "REG") & (d["game_id"].str.startswith(str(YEAR)))]
+          rows = []
+          for gid in season["game_id"].unique():
+              g = season[season.game_id == gid]
+              final = g.dropna(subset=["result"])
+              if len(final) == 0:
+                  continue
+              home, away = g["home_team"].iloc[0], g["away_team"].iloc[0]
+              wk = int(g["week"].iloc[0])
+              home_share = weighted_split(g)
+              home_pts, away_pts = round(home_share * 100, 1), round((1 - home_share) * 100, 1)
+              margin = final["result"].iloc[-1]
+              h, a = apply_failsafe(home_pts, away_pts, margin)
+              rows.append({"week": wk, "home": home, "away": away, "home_pts": h, "away_pts": a})
+
+          if not rows:
+              print(f"No completed games for {YEAR} yet -- nothing to update.")
+              raise SystemExit(0)
+
+          allg = pd.DataFrame(rows)
+          long = pd.concat([
+              allg[["week", "home", "away", "home_pts"]].rename(columns={"home": "team", "away": "opponent", "home_pts": "UPS"}),
+              allg[["week", "away", "home", "away_pts"]].rename(columns={"away": "team", "home": "opponent", "away_pts": "UPS"}),
+          ]).reset_index(drop=True)
+          long = long.sort_values(["team", "week"]).reset_index(drop=True)
+
+          teams = sorted(long["team"].unique())
+          max_week = int(long["week"].max())
+          weeks = list(range(1, max_week + 1))
+          data = {t: {"ups_score": [], "ups_rank": [], "apsplus_score": [], "apsplus_rank": []} for t in teams}
+
+          for wk in weeks:
+              upto = long[long["week"] <= wk].copy()
+              ups_avg = upto.groupby("team")["UPS"].mean()
+              opp_avg_map = ups_avg.to_dict()
+              upto["opp_avg"] = upto["opponent"].map(opp_avg_map)
+              upto["contribution"] = (upto["UPS"] / 100) * upto["opp_avg"]
+              aps_avg = upto.groupby("team")["contribution"].mean()
+              ups_full = ups_avg.reindex(teams)
+              aps_full = aps_avg.reindex(teams)
+              league_avg_aps = aps_full.mean()
+              apsplus_full = aps_full / league_avg_aps * 100
+              ups_rank = ups_full.rank(ascending=False, method="min")
+              apsplus_rank = apsplus_full.rank(ascending=False, method="min")
+              for t in teams:
+                  data[t]["ups_score"].append(round(ups_full[t], 1) if pd.notna(ups_full[t]) else None)
+                  data[t]["apsplus_score"].append(round(apsplus_full[t], 1) if pd.notna(apsplus_full[t]) else None)
+                  data[t]["ups_rank"].append(int(ups_rank[t]) if pd.notna(ups_rank[t]) else None)
+                  data[t]["apsplus_rank"].append(int(apsplus_rank[t]) if pd.notna(apsplus_rank[t]) else None)
+
+          season_json = {"season": YEAR, "teams": teams, "weeks": weeks, "data": data}
+
+          with open("data.json", encoding="utf-8") as f:
+              all_seasons = json.load(f)
+          all_seasons[str(YEAR)] = season_json
+          with open("data.json", "w", encoding="utf-8") as f:
+              json.dump(all_seasons, f)
+
+          print(f"Updated {YEAR} in data.json ({len(weeks)} weeks, {len(teams)} teams).")
+          PYEOF
+
+      - name: Commit and push if data changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data.json
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Update ${{ steps.season.outputs.season }} season data"
+            git push
+          fi
