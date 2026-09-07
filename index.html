@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NFL Power Rankings — UPS / APS+</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 960px; margin: 24px auto; padding: 0 16px; color: #1a1a1a; }
+  h1 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+  p.sub { color: #666; font-size: 14px; margin-top: 0; }
+  .season-bar { display: flex; align-items: center; gap: 10px; margin: 20px 0; }
+  .season-bar label { font-size: 13px; color: #555; }
+  .season-bar input { font-size: 16px; padding: 8px 10px; border-radius: 6px; border: 1px solid #ccc; width: 100px; }
+  .season-bar .err { font-size: 13px; color: #c0392b; }
+  .controls { display: flex; gap: 16px; flex-wrap: wrap; margin: 16px 0; align-items: center; }
+  .controls label { font-size: 13px; color: #555; margin-right: 6px; }
+  select { font-size: 14px; padding: 6px 10px; border-radius: 6px; border: 1px solid #ccc; background: #fff; }
+  .toggle-group { display: inline-flex; }
+  .toggle-group button { font-size: 14px; padding: 6px 12px; border: 1px solid #ccc; background: #fff; cursor: pointer; border-radius: 0; }
+  .toggle-group button:first-child { border-radius: 6px 0 0 6px; }
+  .toggle-group button:last-child { border-radius: 0 6px 6px 0; margin-left: -1px; }
+  .toggle-group button.active { background: #2a78d6; color: #fff; border-color: #2a78d6; }
+  .chart-wrap { position: relative; width: 100%; height: 460px; margin-top: 12px; }
+  .note { font-size: 13px; color: #666; margin-top: 10px; }
+  #status { font-size: 14px; color: #666; padding: 20px 0; }
+  footer { margin-top: 40px; font-size: 12px; color: #999; }
+</style>
+</head>
+<body>
+
+<h1>NFL power rankings — UPS / APS+</h1>
+<p class="sub">Win-probability time-weighted results, adjusted for opponent strength. Cumulative season-to-date through each week.</p>
+
+<div id="status">Loading data…</div>
+
+<div id="app" style="display:none;">
+  <div class="season-bar">
+    <label for="seasonInput">Season</label>
+    <input type="number" id="seasonInput" list="seasonList" />
+    <datalist id="seasonList"></datalist>
+    <span class="err" id="seasonErr"></span>
+  </div>
+
+  <div class="controls">
+    <div><label>Team</label><select id="teamSelect"></select></div>
+    <div><label>Metric</label><div class="toggle-group" id="metricToggle">
+      <button data-metric="ups" class="active">UPS</button><button data-metric="apsplus">APS+</button>
+    </div></div>
+    <div><label>View</label><div class="toggle-group" id="viewToggle">
+      <button data-view="score" class="active">Score</button><button data-view="rank">Power ranking (1-32)</button>
+    </div></div>
+  </div>
+  <div class="chart-wrap"><canvas id="rankChart" role="img" aria-label="Weekly team performance chart"></canvas></div>
+  <p class="note" id="note"></p>
+</div>
+
+<footer>UPS = Unadjusted Performance Score (100 pts split per game, empirically time-weighted win probability). APS+ = Adjusted Performance Score, indexed to 100 = league average that season. Data: nflverse play-by-play.</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const statusEl = document.getElementById('status');
+const appEl = document.getElementById('app');
+const seasonInput = document.getElementById('seasonInput');
+const seasonErr = document.getElementById('seasonErr');
+const teamSelect = document.getElementById('teamSelect');
+const metricBtns = document.querySelectorAll('#metricToggle button');
+const viewBtns = document.querySelectorAll('#viewToggle button');
+const canvas = document.getElementById('rankChart');
+const note = document.getElementById('note');
+
+let SEASONS = null;
+let currentData = null;
+let chart = null;
+const state = { metric: 'ups', view: 'score' };
+
+fetch('data.json?_=' + Date.now())
+  .then(r => {
+    if (!r.ok) throw new Error('fetch failed: ' + r.status);
+    return r.json();
+  })
+  .then(d => {
+    SEASONS = d;
+    statusEl.style.display = 'none';
+    appEl.style.display = 'block';
+
+    const seasonKeys = Object.keys(SEASONS).map(Number).sort((a,b) => a - b);
+    const dl = document.getElementById('seasonList');
+    seasonKeys.forEach(s => {
+      const o = document.createElement('option');
+      o.value = s;
+      dl.appendChild(o);
+    });
+
+    const latest = Math.max(...seasonKeys);
+    seasonInput.value = latest;
+    loadSeason(latest);
+  })
+  .catch(err => {
+    statusEl.textContent = 'Could not load data.json (' + err.message + '). Make sure it sits next to index.html.';
+  });
+
+seasonInput.addEventListener('change', () => {
+  const yr = parseInt(seasonInput.value, 10);
+  if (!yr) return;
+  loadSeason(yr);
+});
+
+function loadSeason(yr) {
+  const d = SEASONS[String(yr)];
+  if (!d) {
+    const keys = Object.keys(SEASONS).map(Number);
+    seasonErr.textContent = 'No data for ' + yr + '. Available: ' + Math.min(...keys) + '-' + Math.max(...keys) + '.';
+    return;
+  }
+  seasonErr.textContent = '';
+  currentData = d;
+  teamSelect.innerHTML = '';
+  currentData.teams.forEach(t => {
+    const o = document.createElement('option');
+    o.value = t; o.textContent = t;
+    teamSelect.appendChild(o);
+  });
+  teamSelect.value = currentData.teams.includes('SEA') ? 'SEA' : currentData.teams[0];
+  render();
+}
+
+function seriesKey() {
+  if (state.view === 'rank') return state.metric === 'ups' ? 'ups_rank' : 'apsplus_rank';
+  return state.metric === 'ups' ? 'ups_score' : 'apsplus_score';
+}
+
+function render() {
+  if (!currentData) return;
+  const highlighted = teamSelect.value;
+  const key = seriesKey();
+
+  const datasets = currentData.teams.map(t => {
+    const isHi = t === highlighted;
+    return {
+      label: t,
+      data: currentData.data[t][key],
+      borderColor: isHi ? '#2a78d6' : 'rgba(137,135,129,0.30)',
+      backgroundColor: isHi ? '#2a78d6' : 'rgba(137,135,129,0.30)',
+      borderWidth: isHi ? 3 : 1,
+      pointRadius: isHi ? 3 : 0,
+      order: isHi ? 0 : 1,
+      tension: 0.15
+    };
+  });
+
+  const metricLabel = state.metric === 'ups' ? 'UPS' : 'APS+';
+  const viewLabel = state.view === 'rank' ? 'power ranking (1 = best)' : 'score';
+  note.textContent = highlighted + ' weekly ' + metricLabel + ' ' + viewLabel + ', ' + currentData.season + ' season (cumulative season-to-date).';
+
+  const yOptions = state.view === 'rank'
+    ? { reverse: true, min: 1, max: 32, ticks: { stepSize: 4 }, title: { display: true, text: 'Rank' } }
+    : { reverse: false, title: { display: true, text: metricLabel + (state.metric === 'apsplus' ? ' (100 = avg)' : ' score') } };
+
+  if (chart) chart.destroy();
+  chart = new Chart(canvas, {
+    type: 'line',
+    data: { labels: currentData.weeks, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'nearest', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          filter: (item) => item.dataset.label === highlighted,
+          callbacks: {
+            title: (items) => 'Week ' + items[0].label,
+            label: (item) => item.dataset.label + ': ' + item.parsed.y
+          }
+        }
+      },
+      scales: {
+        x: { title: { display: true, text: 'Week' }, grid: { display: false } },
+        y: Object.assign({ grid: { color: 'rgba(137,135,129,0.15)' } }, yOptions)
+      }
+    }
+  });
+}
+
+teamSelect.addEventListener('change', render);
+metricBtns.forEach(b => b.addEventListener('click', () => {
+  metricBtns.forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  state.metric = b.dataset.metric;
+  render();
+}));
+viewBtns.forEach(b => b.addEventListener('click', () => {
+  viewBtns.forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  state.view = b.dataset.view;
+  render();
+}));
+</script>
+</body>
+</html>
