@@ -65,10 +65,12 @@ jobs:
           print(f"Total regular-season games found: {len(games)}")
 
           # ---- Split into completed vs remaining ----
+          # A game counts as "completed" if both teams have a recorded score --
+          # this is more robust than matching MLB's exact status text, which
+          # isn't documented and can vary.
           completed = []
           remaining = []
           for g in games:
-              state = g.get("status", {}).get("detailedState", "")
               home = g["teams"]["home"]
               away = g["teams"]["away"]
               home_abbr = home["team"].get("abbreviation")
@@ -76,19 +78,15 @@ jobs:
               date = g.get("officialDate")
               if not home_abbr or not away_abbr or not date:
                   continue
-              if state in ("Final", "Game Over", "Completed Early"):
-                  home_score = home.get("score")
-                  away_score = away.get("score")
-                  if home_score is None or away_score is None:
-                      continue
+              home_score = home.get("score")
+              away_score = away.get("score")
+              if home_score is not None and away_score is not None:
                   completed.append({
                       "date": date, "home": home_abbr, "away": away_abbr,
                       "home_score": home_score, "away_score": away_score,
                   })
-              elif state in ("Scheduled", "Pre-Game", "Warmup"):
+              else:
                   remaining.append({"date": date, "home": home_abbr, "away": away_abbr})
-              # anything else (Postponed, Cancelled, In Progress, Suspended) is
-              # skipped -- not a completed result and not a reliable remaining game
 
           print(f"Completed: {len(completed)}, Remaining: {len(remaining)}")
 
