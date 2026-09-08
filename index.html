@@ -3,12 +3,19 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>NFL Power Rankings — UPS / APS+</title>
+<title>Power Rankings — NFL / MLB</title>
 <style>
   body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 960px; margin: 24px auto; padding: 0 16px; color: #1a1a1a; }
   h1 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
   h2 { font-size: 16px; font-weight: 600; margin: 28px 0 8px; }
   p.sub { color: #666; font-size: 14px; margin-top: 0; }
+
+  .league-tabs { display: flex; gap: 4px; border-bottom: 2px solid #e2e2e2; margin: 16px 0 0; }
+  .league-tabs button { font-size: 15px; padding: 10px 18px; border: none; background: none; cursor: pointer; color: #666; border-bottom: 2px solid transparent; margin-bottom: -2px; font-weight: 500; }
+  .league-tabs button.active { color: #2a78d6; border-bottom-color: #2a78d6; font-weight: 600; }
+  .league-panel { display: none; padding-top: 8px; }
+  .league-panel.active { display: block; }
+
   .season-bar { display: flex; align-items: center; gap: 10px; margin: 20px 0; }
   .season-bar label { font-size: 13px; color: #555; }
   .season-bar input { font-size: 16px; padding: 8px 10px; border-radius: 6px; border: 1px solid #ccc; width: 100px; }
@@ -42,313 +49,521 @@
 
   .chart-wrap { position: relative; width: 100%; height: 460px; margin-top: 12px; }
   .note { font-size: 13px; color: #666; margin-top: 10px; }
-  #status { font-size: 14px; color: #666; padding: 20px 0; }
+  .status-msg { font-size: 14px; color: #666; padding: 20px 0; }
   footer { margin-top: 40px; font-size: 12px; color: #999; }
 </style>
 </head>
 <body>
 
-<h1>NFL power rankings — UPS / APS+</h1>
-<p class="sub">Win-probability time-weighted results, adjusted for opponent strength.</p>
+<h1>Power rankings</h1>
+<p class="sub">Results-based team performance, adjusted for opponent strength.</p>
 
-<div id="status">Loading data…</div>
-
-<div id="app" style="display:none;">
-  <div class="season-bar">
-    <label for="seasonInput">Season</label>
-    <input type="number" id="seasonInput" list="seasonList" />
-    <datalist id="seasonList"></datalist>
-    <span class="err" id="seasonErr"></span>
-  </div>
-
-  <h2>Current standings</h2>
-  <table class="grid" id="gridTable">
-    <thead>
-      <tr>
-        <th data-key="team">Team</th>
-        <th class="num" data-key="ups_score">UPS</th>
-        <th class="num" data-key="ups_rank">UPS Rank</th>
-        <th class="num" data-key="apsplus_score">APS+</th>
-        <th class="num" data-key="apsplus_rank">APS+ Rank</th>
-      </tr>
-    </thead>
-    <tbody id="gridBody"></tbody>
-  </table>
-  <p class="grid-note" id="gridNote"></p>
-
-  <h2>Weekly movement</h2>
-  <div class="controls">
-    <div>
-      <label>Metric</label>
-      <div class="toggle-group" id="metricToggle">
-        <button data-metric="ups" class="active">UPS</button><button data-metric="apsplus">APS+</button>
-      </div>
-    </div>
-    <div>
-      <label>View</label>
-      <div class="toggle-group" id="viewToggle">
-        <button data-view="score" class="active">Score</button><button data-view="rank">Power ranking (1-32)</button>
-      </div>
-    </div>
-    <div>
-      <label>Highlight teams</label>
-      <div class="team-picker" id="teamPicker"></div>
-      <button class="clear-btn" id="clearTeams">Clear selection</button>
-    </div>
-  </div>
-  <div class="chart-wrap"><canvas id="rankChart" role="img" aria-label="Weekly team performance chart"></canvas></div>
-  <p class="note" id="note"></p>
+<div class="league-tabs">
+  <button id="tabBtnNfl" class="active">NFL</button>
+  <button id="tabBtnMlb">MLB</button>
 </div>
 
-<footer>UPS = Unadjusted Performance Score (100 pts split per game, empirically time-weighted win probability). APS+ = Adjusted Performance Score, indexed to 100 = league average that season. Data: nflverse play-by-play. Logos &amp; colors: nflverse team reference data.</footer>
+<!-- ============================= NFL PANEL ============================= -->
+<div class="league-panel active" id="panelNfl">
+
+  <div id="nflStatus" class="status-msg">Loading data…</div>
+
+  <div id="nflApp" style="display:none;">
+    <div class="season-bar">
+      <label for="nflSeasonInput">Season</label>
+      <input type="number" id="nflSeasonInput" list="nflSeasonList" />
+      <datalist id="nflSeasonList"></datalist>
+      <span class="err" id="nflSeasonErr"></span>
+    </div>
+
+    <h2>Current standings</h2>
+    <table class="grid" id="nflGridTable">
+      <thead>
+        <tr>
+          <th data-key="team">Team</th>
+          <th class="num" data-key="ups_score">UPS</th>
+          <th class="num" data-key="ups_rank">UPS Rank</th>
+          <th class="num" data-key="apsplus_score">APS+</th>
+          <th class="num" data-key="apsplus_rank">APS+ Rank</th>
+        </tr>
+      </thead>
+      <tbody id="nflGridBody"></tbody>
+    </table>
+    <p class="grid-note" id="nflGridNote"></p>
+
+    <h2>Weekly movement</h2>
+    <div class="controls">
+      <div>
+        <label>Metric</label>
+        <div class="toggle-group" id="nflMetricToggle">
+          <button data-metric="ups" class="active">UPS</button><button data-metric="apsplus">APS+</button>
+        </div>
+      </div>
+      <div>
+        <label>View</label>
+        <div class="toggle-group" id="nflViewToggle">
+          <button data-view="score" class="active">Score</button><button data-view="rank">Power ranking (1-32)</button>
+        </div>
+      </div>
+      <div>
+        <label>Highlight teams</label>
+        <div class="team-picker" id="nflTeamPicker"></div>
+        <button class="clear-btn" id="nflClearTeams">Clear selection</button>
+      </div>
+    </div>
+    <div class="chart-wrap"><canvas id="nflChart" role="img" aria-label="Weekly NFL team performance chart"></canvas></div>
+    <p class="note" id="nflNote"></p>
+  </div>
+
+  <footer>UPS = Unadjusted Performance Score (100 pts split per game, empirically time-weighted win probability). APS+ = Adjusted Performance Score, indexed to 100 = league average that season. Data: nflverse play-by-play. Logos &amp; colors: nflverse team reference data.</footer>
+</div>
+
+<!-- ============================= MLB PANEL ============================= -->
+<div class="league-panel" id="panelMlb">
+
+  <div id="mlbStatus" class="status-msg">Loading data…</div>
+
+  <div id="mlbApp" style="display:none;">
+    <h2>Current standings</h2>
+    <table class="grid" id="mlbGridTable">
+      <thead>
+        <tr>
+          <th data-key="team">Team</th>
+          <th class="num" data-key="wins">W</th>
+          <th class="num" data-key="losses">L</th>
+          <th class="num" data-key="win_pct">PCT</th>
+          <th class="num" data-key="run_diff">+/-</th>
+          <th class="num" data-key="avg_rank">Avg Rank</th>
+          <th data-key="pred_record">Predicted Record</th>
+        </tr>
+      </thead>
+      <tbody id="mlbGridBody"></tbody>
+    </table>
+    <p class="grid-note" id="mlbGridNote"></p>
+
+    <h2>Season movement</h2>
+    <div class="controls">
+      <div>
+        <label>Metric</label>
+        <div class="toggle-group" id="mlbMetricToggle">
+          <button data-metric="win_pct" class="active">Win PCT</button><button data-metric="run_diff">Run Diff</button><button data-metric="avg_rank">Avg Rank</button>
+        </div>
+      </div>
+      <div>
+        <label>Highlight teams</label>
+        <div class="team-picker" id="mlbTeamPicker"></div>
+        <button class="clear-btn" id="mlbClearTeams">Clear selection</button>
+      </div>
+    </div>
+    <div class="chart-wrap"><canvas id="mlbChart" role="img" aria-label="Season-long MLB team performance chart"></canvas></div>
+    <p class="note" id="mlbNote"></p>
+  </div>
+
+  <footer>PCT = winning percentage. +/- = cumulative run differential. Avg Rank = average of that day's PCT rank and run-differential rank (1 = best). Predicted Record = current record + expected wins from remaining games, using a log5 matchup formula with a fixed 52.5% home-field-advantage constant. Data: MLB Stats API (unofficial public endpoint). Logos &amp; colors: mlbplotR team reference data.</footer>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
-const TEAM_META = {"ARI": {"name": "Cardinals", "color": "#97233F", "color2": "#000000", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/ari.png"}, "ATL": {"name": "Falcons", "color": "#A71930", "color2": "#000000", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/atl.png"}, "BAL": {"name": "Ravens", "color": "#241773", "color2": "#9E7C0C", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/bal.png"}, "BUF": {"name": "Bills", "color": "#00338D", "color2": "#C60C30", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/buf.png"}, "CAR": {"name": "Panthers", "color": "#0085CA", "color2": "#000000", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/car.png"}, "CHI": {"name": "Bears", "color": "#0B162A", "color2": "#E64100", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/chi.png"}, "CIN": {"name": "Bengals", "color": "#FB4F14", "color2": "#000000", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/cin.png"}, "CLE": {"name": "Browns", "color": "#FF3C00", "color2": "#311D00", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/cle.png"}, "DAL": {"name": "Cowboys", "color": "#002244", "color2": "#B0B7BC", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/dal.png"}, "DEN": {"name": "Broncos", "color": "#002244", "color2": "#FB4F14", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/den.png"}, "DET": {"name": "Lions", "color": "#0076B6", "color2": "#B0B7BC", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/det.png"}, "GB": {"name": "Packers", "color": "#203731", "color2": "#FFB612", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/gb.png"}, "HOU": {"name": "Texans", "color": "#03202F", "color2": "#A71930", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/hou.png"}, "IND": {"name": "Colts", "color": "#002C5F", "color2": "#a5acaf", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/ind.png"}, "JAX": {"name": "Jaguars", "color": "#006778", "color2": "#000000", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/jax.png"}, "KC": {"name": "Chiefs", "color": "#E31837", "color2": "#FFB612", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/kc.png"}, "LA": {"name": "Rams", "color": "#003594", "color2": "#FFD100", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/lar.png"}, "LAC": {"name": "Chargers", "color": "#007BC7", "color2": "#ffc20e", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/lac.png"}, "LV": {"name": "Raiders", "color": "#000000", "color2": "#A5ACAF", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/lv.png"}, "MIA": {"name": "Dolphins", "color": "#008E97", "color2": "#F58220", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/mia.png"}, "MIN": {"name": "Vikings", "color": "#4F2683", "color2": "#FFC62F", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/min.png"}, "NE": {"name": "Patriots", "color": "#002244", "color2": "#C60C30", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/ne.png"}, "NO": {"name": "Saints", "color": "#D3BC8D", "color2": "#000000", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/no.png"}, "NYG": {"name": "Giants", "color": "#0B2265", "color2": "#A71930", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/nyg.png"}, "NYJ": {"name": "Jets", "color": "#003F2D", "color2": "#000000", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/nyj.png"}, "PHI": {"name": "Eagles", "color": "#004C54", "color2": "#A5ACAF", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/phi.png"}, "PIT": {"name": "Steelers", "color": "#000000", "color2": "#FFB612", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/pit.png"}, "SEA": {"name": "Seahawks", "color": "#002244", "color2": "#69be28", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/sea.png"}, "SF": {"name": "49ers", "color": "#AA0000", "color2": "#B3995D", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/sf.png"}, "TB": {"name": "Buccaneers", "color": "#A71930", "color2": "#322F2B", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/tb.png"}, "TEN": {"name": "Titans", "color": "#4495D2", "color2": "#D50A0A", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/ten.png"}, "WAS": {"name": "Commanders", "color": "#5A1414", "color2": "#FFB612", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/wsh.png"}};
+// ===================================================================
+// League tab switching
+// ===================================================================
+const tabBtnNfl = document.getElementById('tabBtnNfl');
+const tabBtnMlb = document.getElementById('tabBtnMlb');
+const panelNfl = document.getElementById('panelNfl');
+const panelMlb = document.getElementById('panelMlb');
+let mlbLoaded = false;
 
-const LAST_TEAMS_KEY = "nfl-power-rankings-last-teams";
-
-const statusEl = document.getElementById('status');
-const appEl = document.getElementById('app');
-const seasonInput = document.getElementById('seasonInput');
-const seasonErr = document.getElementById('seasonErr');
-const gridBody = document.getElementById('gridBody');
-const gridNote = document.getElementById('gridNote');
-const metricBtns = document.querySelectorAll('#metricToggle button');
-const viewBtns = document.querySelectorAll('#viewToggle button');
-const teamPicker = document.getElementById('teamPicker');
-const clearTeamsBtn = document.getElementById('clearTeams');
-const canvas = document.getElementById('rankChart');
-const note = document.getElementById('note');
-
-let SEASONS = null;
-let currentData = null;
-let chart = null;
-const state = { metric: 'ups', view: 'score' };
-let selectedTeams = [];
-let sortKey = 'apsplus_rank';
-let sortDir = 1;
-
-try {
-  const saved = JSON.parse(localStorage.getItem(LAST_TEAMS_KEY) || '[]');
-  if (Array.isArray(saved)) selectedTeams = saved;
-} catch (e) { selectedTeams = []; }
-
-fetch('data.json?_=' + Date.now())
-  .then(r => {
-    if (!r.ok) throw new Error('fetch failed: ' + r.status);
-    return r.json();
-  })
-  .then(d => {
-    SEASONS = d;
-    statusEl.style.display = 'none';
-    appEl.style.display = 'block';
-
-    const seasonKeys = Object.keys(SEASONS).map(Number).sort((a,b) => a - b);
-    const dl = document.getElementById('seasonList');
-    seasonKeys.forEach(s => {
-      const o = document.createElement('option');
-      o.value = s;
-      dl.appendChild(o);
-    });
-
-    const latest = Math.max(...seasonKeys);
-    seasonInput.value = latest;
-    loadSeason(latest);
-  })
-  .catch(err => {
-    statusEl.textContent = 'Could not load data.json (' + err.message + '). Make sure it sits next to index.html.';
-  });
-
-seasonInput.addEventListener('change', () => {
-  const yr = parseInt(seasonInput.value, 10);
-  if (!yr) return;
-  loadSeason(yr);
+tabBtnNfl.addEventListener('click', () => {
+  tabBtnNfl.classList.add('active'); tabBtnMlb.classList.remove('active');
+  panelNfl.classList.add('active'); panelMlb.classList.remove('active');
+});
+tabBtnMlb.addEventListener('click', () => {
+  tabBtnMlb.classList.add('active'); tabBtnNfl.classList.remove('active');
+  panelMlb.classList.add('active'); panelNfl.classList.remove('active');
+  if (!mlbLoaded) { mlbLoaded = true; loadMlb(); }
 });
 
-function loadSeason(yr) {
-  const d = SEASONS[String(yr)];
-  if (!d) {
-    const keys = Object.keys(SEASONS).map(Number);
-    seasonErr.textContent = 'No data for ' + yr + '. Available: ' + Math.min(...keys) + '-' + Math.max(...keys) + '.';
-    return;
-  }
-  seasonErr.textContent = '';
-  currentData = d;
-  buildTeamPicker();
-  renderGrid();
-  render();
-}
+// ===================================================================
+// NFL panel
+// ===================================================================
+const NFL_TEAM_META = {"ARI": {"name": "Cardinals", "color": "#97233F", "color2": "#000000", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/ari.png"}, "ATL": {"name": "Falcons", "color": "#A71930", "color2": "#000000", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/atl.png"}, "BAL": {"name": "Ravens", "color": "#241773", "color2": "#9E7C0C", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/bal.png"}, "BUF": {"name": "Bills", "color": "#00338D", "color2": "#C60C30", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/buf.png"}, "CAR": {"name": "Panthers", "color": "#0085CA", "color2": "#000000", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/car.png"}, "CHI": {"name": "Bears", "color": "#0B162A", "color2": "#E64100", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/chi.png"}, "CIN": {"name": "Bengals", "color": "#FB4F14", "color2": "#000000", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/cin.png"}, "CLE": {"name": "Browns", "color": "#FF3C00", "color2": "#311D00", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/cle.png"}, "DAL": {"name": "Cowboys", "color": "#002244", "color2": "#B0B7BC", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/dal.png"}, "DEN": {"name": "Broncos", "color": "#002244", "color2": "#FB4F14", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/den.png"}, "DET": {"name": "Lions", "color": "#0076B6", "color2": "#B0B7BC", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/det.png"}, "GB": {"name": "Packers", "color": "#203731", "color2": "#FFB612", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/gb.png"}, "HOU": {"name": "Texans", "color": "#03202F", "color2": "#A71930", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/hou.png"}, "IND": {"name": "Colts", "color": "#002C5F", "color2": "#a5acaf", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/ind.png"}, "JAX": {"name": "Jaguars", "color": "#006778", "color2": "#000000", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/jax.png"}, "KC": {"name": "Chiefs", "color": "#E31837", "color2": "#FFB612", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/kc.png"}, "LA": {"name": "Rams", "color": "#003594", "color2": "#FFD100", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/lar.png"}, "LAC": {"name": "Chargers", "color": "#007BC7", "color2": "#ffc20e", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/lac.png"}, "LV": {"name": "Raiders", "color": "#000000", "color2": "#A5ACAF", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/lv.png"}, "MIA": {"name": "Dolphins", "color": "#008E97", "color2": "#F58220", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/mia.png"}, "MIN": {"name": "Vikings", "color": "#4F2683", "color2": "#FFC62F", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/min.png"}, "NE": {"name": "Patriots", "color": "#002244", "color2": "#C60C30", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/ne.png"}, "NO": {"name": "Saints", "color": "#D3BC8D", "color2": "#000000", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/no.png"}, "NYG": {"name": "Giants", "color": "#0B2265", "color2": "#A71930", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/nyg.png"}, "NYJ": {"name": "Jets", "color": "#003F2D", "color2": "#000000", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/nyj.png"}, "PHI": {"name": "Eagles", "color": "#004C54", "color2": "#A5ACAF", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/phi.png"}, "PIT": {"name": "Steelers", "color": "#000000", "color2": "#FFB612", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/pit.png"}, "SEA": {"name": "Seahawks", "color": "#002244", "color2": "#69be28", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/sea.png"}, "SF": {"name": "49ers", "color": "#AA0000", "color2": "#B3995D", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/sf.png"}, "TB": {"name": "Buccaneers", "color": "#A71930", "color2": "#322F2B", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/tb.png"}, "TEN": {"name": "Titans", "color": "#4495D2", "color2": "#D50A0A", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/ten.png"}, "WAS": {"name": "Commanders", "color": "#5A1414", "color2": "#FFB612", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/wsh.png"}};
+const NFL_LAST_TEAMS_KEY = "nfl-power-rankings-last-teams";
 
-function teamLogo(abbr, size) {
-  const meta = TEAM_META[abbr];
+function teamLogoImg(meta, size) {
   const src = meta ? meta.logo : '';
   return '<img src="' + src + '" alt="" width="' + size + '" height="' + size + '" loading="lazy">';
 }
 
-function buildTeamPicker() {
-  teamPicker.innerHTML = '';
-  currentData.teams.forEach(t => {
-    const id = 'team-chk-' + t;
-    const wrap = document.createElement('label');
-    wrap.innerHTML =
-      '<input type="checkbox" id="' + id + '" value="' + t + '"' + (selectedTeams.includes(t) ? ' checked' : '') + '>' +
-      teamLogo(t, 18) + '<span>' + t + '</span>';
-    teamPicker.appendChild(wrap);
+(function initNfl() {
+  const statusEl = document.getElementById('nflStatus');
+  const appEl = document.getElementById('nflApp');
+  const seasonInput = document.getElementById('nflSeasonInput');
+  const seasonErr = document.getElementById('nflSeasonErr');
+  const gridBody = document.getElementById('nflGridBody');
+  const gridNote = document.getElementById('nflGridNote');
+  const metricBtns = document.querySelectorAll('#nflMetricToggle button');
+  const viewBtns = document.querySelectorAll('#nflViewToggle button');
+  const teamPicker = document.getElementById('nflTeamPicker');
+  const clearTeamsBtn = document.getElementById('nflClearTeams');
+  const canvas = document.getElementById('nflChart');
+  const note = document.getElementById('nflNote');
+
+  let SEASONS = null;
+  let currentData = null;
+  let chart = null;
+  const state = { metric: 'ups', view: 'score' };
+  let selectedTeams = [];
+  let sortKey = 'apsplus_rank';
+  let sortDir = 1;
+
+  try {
+    const saved = JSON.parse(localStorage.getItem(NFL_LAST_TEAMS_KEY) || '[]');
+    if (Array.isArray(saved)) selectedTeams = saved;
+  } catch (e) { selectedTeams = []; }
+
+  fetch('data.json?_=' + Date.now())
+    .then(r => { if (!r.ok) throw new Error('fetch failed: ' + r.status); return r.json(); })
+    .then(d => {
+      SEASONS = d;
+      statusEl.style.display = 'none';
+      appEl.style.display = 'block';
+      const seasonKeys = Object.keys(SEASONS).map(Number).sort((a,b) => a - b);
+      const dl = document.getElementById('nflSeasonList');
+      seasonKeys.forEach(s => { const o = document.createElement('option'); o.value = s; dl.appendChild(o); });
+      const latest = Math.max(...seasonKeys);
+      seasonInput.value = latest;
+      loadSeason(latest);
+    })
+    .catch(err => { statusEl.textContent = 'Could not load data.json (' + err.message + ').'; });
+
+  seasonInput.addEventListener('change', () => {
+    const yr = parseInt(seasonInput.value, 10);
+    if (!yr) return;
+    loadSeason(yr);
   });
-  teamPicker.querySelectorAll('input[type=checkbox]').forEach(cb => {
-    cb.addEventListener('change', () => {
-      const t = cb.value;
-      if (cb.checked) {
-        if (!selectedTeams.includes(t)) selectedTeams.push(t);
-      } else {
-        selectedTeams = selectedTeams.filter(x => x !== t);
+
+  function loadSeason(yr) {
+    const d = SEASONS[String(yr)];
+    if (!d) {
+      const keys = Object.keys(SEASONS).map(Number);
+      seasonErr.textContent = 'No data for ' + yr + '. Available: ' + Math.min(...keys) + '-' + Math.max(...keys) + '.';
+      return;
+    }
+    seasonErr.textContent = '';
+    currentData = d;
+    buildTeamPicker();
+    renderGrid();
+    render();
+  }
+
+  function buildTeamPicker() {
+    teamPicker.innerHTML = '';
+    currentData.teams.forEach(t => {
+      const wrap = document.createElement('label');
+      wrap.innerHTML = '<input type="checkbox" value="' + t + '"' + (selectedTeams.includes(t) ? ' checked' : '') + '>' +
+        teamLogoImg(NFL_TEAM_META[t], 18) + '<span>' + t + '</span>';
+      teamPicker.appendChild(wrap);
+    });
+    teamPicker.querySelectorAll('input[type=checkbox]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const t = cb.value;
+        if (cb.checked) { if (!selectedTeams.includes(t)) selectedTeams.push(t); }
+        else { selectedTeams = selectedTeams.filter(x => x !== t); }
+        localStorage.setItem(NFL_LAST_TEAMS_KEY, JSON.stringify(selectedTeams));
+        render();
+      });
+    });
+  }
+
+  clearTeamsBtn.addEventListener('click', () => {
+    selectedTeams = [];
+    localStorage.setItem(NFL_LAST_TEAMS_KEY, JSON.stringify(selectedTeams));
+    teamPicker.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false);
+    render();
+  });
+
+  function renderGrid() {
+    const lastWeekIdx = currentData.weeks.length - 1;
+    const lastWeek = currentData.weeks[lastWeekIdx];
+    gridNote.textContent = 'Through week ' + lastWeek + ', ' + currentData.season + ' season.';
+
+    let rows = currentData.teams.map(t => ({
+      team: t,
+      ups_score: currentData.data[t].ups_score[lastWeekIdx],
+      ups_rank: currentData.data[t].ups_rank[lastWeekIdx],
+      apsplus_score: currentData.data[t].apsplus_score[lastWeekIdx],
+      apsplus_rank: currentData.data[t].apsplus_rank[lastWeekIdx],
+    }));
+
+    rows.sort((a, b) => {
+      let av = a[sortKey], bv = b[sortKey];
+      if (sortKey === 'team') { return sortDir * a.team.localeCompare(b.team); }
+      return sortDir * ((av ?? 0) - (bv ?? 0));
+    });
+
+    gridBody.innerHTML = rows.map(r => {
+      const meta = NFL_TEAM_META[r.team] || { name: r.team };
+      return '<tr><td><div class="team-cell">' + teamLogoImg(meta, 22) + '<span>' + r.team + ' — ' + meta.name + '</span></div></td>' +
+        '<td class="num">' + r.ups_score + '</td><td class="num">' + r.ups_rank + '</td>' +
+        '<td class="num">' + r.apsplus_score + '</td><td class="num">' + r.apsplus_rank + '</td></tr>';
+    }).join('');
+
+    document.querySelectorAll('#nflGridTable th').forEach(th => {
+      const key = th.dataset.key;
+      th.innerHTML = th.textContent.replace(/\s*[▲▼]$/, '');
+      if (key === sortKey) th.innerHTML += '<span class="arrow">' + (sortDir === 1 ? '▲' : '▼') + '</span>';
+    });
+  }
+
+  document.querySelectorAll('#nflGridTable th').forEach(th => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.key;
+      if (sortKey === key) { sortDir *= -1; }
+      else {
+        sortKey = key;
+        sortDir = (key === 'team') ? 1 : -1;
+        if (key === 'apsplus_rank' || key === 'ups_rank') sortDir = 1;
       }
-      localStorage.setItem(LAST_TEAMS_KEY, JSON.stringify(selectedTeams));
-      render();
+      renderGrid();
     });
   });
-}
 
-clearTeamsBtn.addEventListener('click', () => {
-  selectedTeams = [];
-  localStorage.setItem(LAST_TEAMS_KEY, JSON.stringify(selectedTeams));
-  teamPicker.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false);
-  render();
-});
+  function seriesKey() {
+    if (state.view === 'rank') return state.metric === 'ups' ? 'ups_rank' : 'apsplus_rank';
+    return state.metric === 'ups' ? 'ups_score' : 'apsplus_score';
+  }
 
-// ---------- Grid ----------
+  function render() {
+    if (!currentData) return;
+    const key = seriesKey();
+    const hasSelection = selectedTeams.length > 0;
 
-function renderGrid() {
-  const lastWeekIdx = currentData.weeks.length - 1;
-  const lastWeek = currentData.weeks[lastWeekIdx];
-  gridNote.textContent = 'Through week ' + lastWeek + ', ' + currentData.season + ' season.';
+    const datasets = currentData.teams.map(t => {
+      const isHi = selectedTeams.includes(t);
+      const meta = NFL_TEAM_META[t] || { color: '#898781', color2: '#898781' };
+      const lineColor = isHi ? meta.color : 'rgba(137,135,129,0.28)';
+      const dotColor = isHi ? meta.color2 : 'rgba(137,135,129,0.28)';
+      return {
+        label: t, data: currentData.data[t][key],
+        borderColor: lineColor, backgroundColor: dotColor,
+        pointBackgroundColor: dotColor, pointBorderColor: dotColor,
+        borderWidth: isHi ? 3 : 1, pointRadius: isHi ? 4 : 0,
+        order: isHi ? 0 : 1, tension: 0.15
+      };
+    });
 
-  let rows = currentData.teams.map(t => ({
-    team: t,
-    ups_score: currentData.data[t].ups_score[lastWeekIdx],
-    ups_rank: currentData.data[t].ups_rank[lastWeekIdx],
-    apsplus_score: currentData.data[t].apsplus_score[lastWeekIdx],
-    apsplus_rank: currentData.data[t].apsplus_rank[lastWeekIdx],
-  }));
+    const metricLabel = state.metric === 'ups' ? 'UPS' : 'APS+';
+    const viewLabel = state.view === 'rank' ? 'power ranking (1 = best)' : 'score';
+    note.textContent = (hasSelection ? selectedTeams.join(', ') : 'No teams selected') + ' — weekly ' + metricLabel + ' ' + viewLabel + ', ' + currentData.season + ' season.';
 
-  rows.sort((a, b) => {
-    let av = a[sortKey], bv = b[sortKey];
-    if (sortKey === 'team') { av = a.team; bv = b.team; return sortDir * av.localeCompare(bv); }
-    return sortDir * ((av ?? 0) - (bv ?? 0));
-  });
+    const yOptions = state.view === 'rank'
+      ? { reverse: true, min: 1, max: 32, ticks: { stepSize: 4 }, title: { display: true, text: 'Rank' } }
+      : { reverse: false, title: { display: true, text: metricLabel + (state.metric === 'apsplus' ? ' (100 = avg)' : ' score') } };
 
-  gridBody.innerHTML = rows.map(r => {
-    const meta = TEAM_META[r.team] || { name: r.team };
-    return '<tr>' +
-      '<td><div class="team-cell">' + teamLogo(r.team, 22) + '<span>' + r.team + ' — ' + meta.name + '</span></div></td>' +
-      '<td class="num">' + r.ups_score + '</td>' +
-      '<td class="num">' + r.ups_rank + '</td>' +
-      '<td class="num">' + r.apsplus_score + '</td>' +
-      '<td class="num">' + r.apsplus_rank + '</td>' +
-      '</tr>';
-  }).join('');
-
-  document.querySelectorAll('#gridTable th').forEach(th => {
-    const key = th.dataset.key;
-    th.innerHTML = th.textContent.replace(/\s*[▲▼]$/, '');
-    if (key === sortKey) {
-      th.innerHTML += '<span class="arrow">' + (sortDir === 1 ? '▲' : '▼') + '</span>';
-    }
-  });
-}
-
-document.querySelectorAll('#gridTable th').forEach(th => {
-  th.addEventListener('click', () => {
-    const key = th.dataset.key;
-    if (sortKey === key) {
-      sortDir *= -1;
-    } else {
-      sortKey = key;
-      sortDir = (key === 'team') ? 1 : -1; // scores/ranks default to descending-quality order
-      if (key === 'apsplus_rank' || key === 'ups_rank') sortDir = 1; // rank 1 = best, ascending
-    }
-    renderGrid();
-  });
-});
-
-// ---------- Chart ----------
-
-function seriesKey() {
-  if (state.view === 'rank') return state.metric === 'ups' ? 'ups_rank' : 'apsplus_rank';
-  return state.metric === 'ups' ? 'ups_score' : 'apsplus_score';
-}
-
-function render() {
-  if (!currentData) return;
-  const key = seriesKey();
-  const hasSelection = selectedTeams.length > 0;
-
-  const datasets = currentData.teams.map(t => {
-    const isHi = selectedTeams.includes(t);
-    const meta = TEAM_META[t] || { color: '#898781', color2: '#898781' };
-    const lineColor = isHi ? meta.color : 'rgba(137,135,129,0.28)';
-    const dotColor = isHi ? meta.color2 : 'rgba(137,135,129,0.28)';
-    return {
-      label: t,
-      data: currentData.data[t][key],
-      borderColor: lineColor,
-      backgroundColor: dotColor,
-      pointBackgroundColor: dotColor,
-      pointBorderColor: dotColor,
-      borderWidth: isHi ? 3 : 1,
-      pointRadius: isHi ? 4 : 0,
-      order: isHi ? 0 : 1,
-      tension: 0.15
-    };
-  });
-
-  const metricLabel = state.metric === 'ups' ? 'UPS' : 'APS+';
-  const viewLabel = state.view === 'rank' ? 'power ranking (1 = best)' : 'score';
-  note.textContent = (hasSelection ? selectedTeams.join(', ') : 'No teams selected') + ' — weekly ' + metricLabel + ' ' + viewLabel + ', ' + currentData.season + ' season.';
-
-  const yOptions = state.view === 'rank'
-    ? { reverse: true, min: 1, max: 32, ticks: { stepSize: 4 }, title: { display: true, text: 'Rank' } }
-    : { reverse: false, title: { display: true, text: metricLabel + (state.metric === 'apsplus' ? ' (100 = avg)' : ' score') } };
-
-  if (chart) chart.destroy();
-  chart = new Chart(canvas, {
-    type: 'line',
-    data: { labels: currentData.weeks, datasets },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: 'nearest', intersect: false },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          filter: (item) => !hasSelection || selectedTeams.includes(item.dataset.label),
-          callbacks: {
-            title: (items) => 'Week ' + items[0].label,
-            label: (item) => item.dataset.label + ': ' + item.parsed.y
+    if (chart) chart.destroy();
+    chart = new Chart(canvas, {
+      type: 'line',
+      data: { labels: currentData.weeks, datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'nearest', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            filter: (item) => !hasSelection || selectedTeams.includes(item.dataset.label),
+            callbacks: { title: (items) => 'Week ' + items[0].label, label: (item) => item.dataset.label + ': ' + item.parsed.y }
           }
+        },
+        scales: {
+          x: { title: { display: true, text: 'Week' }, grid: { display: false } },
+          y: Object.assign({ grid: { color: 'rgba(137,135,129,0.15)' } }, yOptions)
         }
-      },
-      scales: {
-        x: { title: { display: true, text: 'Week' }, grid: { display: false } },
-        y: Object.assign({ grid: { color: 'rgba(137,135,129,0.15)' } }, yOptions)
       }
-    }
-  });
-}
+    });
+  }
 
-metricBtns.forEach(b => b.addEventListener('click', () => {
-  metricBtns.forEach(x => x.classList.remove('active'));
-  b.classList.add('active');
-  state.metric = b.dataset.metric;
-  render();
-}));
-viewBtns.forEach(b => b.addEventListener('click', () => {
-  viewBtns.forEach(x => x.classList.remove('active'));
-  b.classList.add('active');
-  state.view = b.dataset.view;
-  render();
-}));
+  metricBtns.forEach(b => b.addEventListener('click', () => {
+    metricBtns.forEach(x => x.classList.remove('active')); b.classList.add('active');
+    state.metric = b.dataset.metric; render();
+  }));
+  viewBtns.forEach(b => b.addEventListener('click', () => {
+    viewBtns.forEach(x => x.classList.remove('active')); b.classList.add('active');
+    state.view = b.dataset.view; render();
+  }));
+})();
+
+// ===================================================================
+// MLB panel
+// ===================================================================
+const MLB_TEAM_META = {"AZ": {"name": "Diamondbacks", "color": "#A71930", "color2": "#30CED8", "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/ari.png"}, "ATL": {"name": "Braves", "color": "#CE1141", "color2": "#13274F", "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/atl.png"}, "BAL": {"name": "Orioles", "color": "#DF4601", "color2": "#000000", "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/bal.png"}, "BOS": {"name": "Red Sox", "color": "#BD3039", "color2": "#0C2340", "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/bos.png"}, "CHC": {"name": "Cubs", "color": "#0E3386", "color2": "#CC3433", "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/chc.png"}, "CWS": {"name": "White Sox", "color": "#27251F", "color2": "#C4CED4", "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/cws.png"}, "CIN": {"name": "Reds", "color": "#C6011F", "color2": "#000000", "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/cin.png"}, "CLE": {"name": "Guardians", "color": "#0C2340", "color2": "#E31937", "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/cle.png"}, "COL": {"name": "Rockies", "color": "#33006F", "color2": "#C4CED4", "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/col.png"}, "DET": {"name": "Tigers", "color": "#0C2340", "color2": "#FA4616", "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/det.png"}, "HOU": {"name": "Astros", "color": "#002D62", "color2": "#EB6E1F", "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/hou.png"}, "KC": {"name": "Royals", "color": "#004687", "color2": "#BD9B60", "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/kc.png"}, "LAA": {"name": "Angels", "color": "#003263", "color2": "#BA0021", "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/laa.png"}, "LAD": {"name": "Dodgers", "color": "#005A9C", "color2": "#EF3E42", "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/lad.png"}, "MIA": {"name": "Marlins", "color": "#00A3E0", "color2": "#EF3340", "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/mia.png"}, "MIL": {"name": "Brewers", "color": "#FFC52F", "color2": "#12284B", "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/mil.png"}, "MIN": {"name": "Twins", "color": "#002B5C", "color2": "#D31145", "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/min.png"}, "NYM": {"name": "Mets", "color": "#002D72", "color2": "#FF5910", "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/nym.png"}, "NYY": {"name": "Yankees", "color": "#0C2340", "color2": "#C4CED3", "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/nyy.png"}, "ATH": {"name": "Athletics", "color": "#003831", "color2": "#EFB21E", "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/oak.png"}, "PHI": {"name": "Phillies", "color": "#E81828", "color2": "#002D72", "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/phi.png"}, "PIT": {"name": "Pirates", "color": "#27251F", "color2": "#FDB827", "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/pit.png"}, "SD": {"name": "Padres", "color": "#2F241D", "color2": "#FFC425", "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/sd.png"}, "SF": {"name": "Giants", "color": "#FD5A1E", "color2": "#27251F", "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/sf.png"}, "SEA": {"name": "Mariners", "color": "#0C2C56", "color2": "#005C5C", "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/sea.png"}, "STL": {"name": "Cardinals", "color": "#C41E3A", "color2": "#0C2340", "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/stl.png"}, "TB": {"name": "Rays", "color": "#092C5C", "color2": "#8FBCE6", "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/tb.png"}, "TEX": {"name": "Rangers", "color": "#003278", "color2": "#C0111F", "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/tex.png"}, "TOR": {"name": "Blue Jays", "color": "#134A8E", "color2": "#1D2D5C", "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/tor.png"}, "WSH": {"name": "Nationals", "color": "#AB0003", "color2": "#14225A", "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/wsh.png"}};
+const MLB_LAST_TEAMS_KEY = "mlb-power-rankings-last-teams";
+
+function loadMlb() {
+  const statusEl = document.getElementById('mlbStatus');
+  const appEl = document.getElementById('mlbApp');
+  const gridBody = document.getElementById('mlbGridBody');
+  const gridNote = document.getElementById('mlbGridNote');
+  const metricBtns = document.querySelectorAll('#mlbMetricToggle button');
+  const teamPicker = document.getElementById('mlbTeamPicker');
+  const clearTeamsBtn = document.getElementById('mlbClearTeams');
+  const canvas = document.getElementById('mlbChart');
+  const note = document.getElementById('mlbNote');
+
+  let mlbData = null;
+  let chart = null;
+  let metric = 'win_pct';
+  let selectedTeams = [];
+  let sortKey = 'win_pct';
+  let sortDir = -1;
+
+  try {
+    const saved = JSON.parse(localStorage.getItem(MLB_LAST_TEAMS_KEY) || '[]');
+    if (Array.isArray(saved)) selectedTeams = saved;
+  } catch (e) { selectedTeams = []; }
+
+  fetch('mlb-data.json?_=' + Date.now())
+    .then(r => { if (!r.ok) throw new Error('fetch failed: ' + r.status); return r.json(); })
+    .then(d => {
+      mlbData = d;
+      statusEl.style.display = 'none';
+      appEl.style.display = 'block';
+      buildTeamPicker();
+      renderGrid();
+      render();
+    })
+    .catch(err => { statusEl.textContent = 'Could not load mlb-data.json (' + err.message + ').'; });
+
+  function buildTeamPicker() {
+    teamPicker.innerHTML = '';
+    mlbData.teams.forEach(t => {
+      const wrap = document.createElement('label');
+      wrap.innerHTML = '<input type="checkbox" value="' + t + '"' + (selectedTeams.includes(t) ? ' checked' : '') + '>' +
+        teamLogoImg(MLB_TEAM_META[t], 18) + '<span>' + t + '</span>';
+      teamPicker.appendChild(wrap);
+    });
+    teamPicker.querySelectorAll('input[type=checkbox]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const t = cb.value;
+        if (cb.checked) { if (!selectedTeams.includes(t)) selectedTeams.push(t); }
+        else { selectedTeams = selectedTeams.filter(x => x !== t); }
+        localStorage.setItem(MLB_LAST_TEAMS_KEY, JSON.stringify(selectedTeams));
+        render();
+      });
+    });
+  }
+
+  clearTeamsBtn.addEventListener('click', () => {
+    selectedTeams = [];
+    localStorage.setItem(MLB_LAST_TEAMS_KEY, JSON.stringify(selectedTeams));
+    teamPicker.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false);
+    render();
+  });
+
+  function renderGrid() {
+    const lastIdx = mlbData.dates.length - 1;
+    gridNote.textContent = 'As of ' + mlbData.asOf + '.';
+
+    let rows = mlbData.teams.map(t => {
+      const pred = mlbData.predicted[t];
+      return {
+        team: t,
+        wins: pred.wins,
+        losses: pred.losses,
+        win_pct: mlbData.trend[t].win_pct[lastIdx],
+        run_diff: mlbData.trend[t].run_diff[lastIdx],
+        avg_rank: mlbData.trend[t].avg_rank[lastIdx],
+        pred_record: pred.pred_record,
+        pred_wins: pred.pred_wins
+      };
+    });
+
+    rows.sort((a, b) => {
+      if (sortKey === 'team') return sortDir * a.team.localeCompare(b.team);
+      if (sortKey === 'pred_record') return sortDir * (a.pred_wins - b.pred_wins);
+      return sortDir * ((a[sortKey] ?? 0) - (b[sortKey] ?? 0));
+    });
+
+    gridBody.innerHTML = rows.map(r => {
+      const meta = MLB_TEAM_META[r.team] || { name: r.team };
+      const pctStr = r.win_pct.toFixed(3).replace(/^0/, '');
+      const rdStr = (r.run_diff > 0 ? '+' : '') + r.run_diff;
+      return '<tr><td><div class="team-cell">' + teamLogoImg(meta, 22) + '<span>' + r.team + ' — ' + meta.name + '</span></div></td>' +
+        '<td class="num">' + r.wins + '</td><td class="num">' + r.losses + '</td>' +
+        '<td class="num">' + pctStr + '</td><td class="num">' + rdStr + '</td>' +
+        '<td class="num">' + r.avg_rank + '</td><td>' + r.pred_record + '</td></tr>';
+    }).join('');
+
+    document.querySelectorAll('#mlbGridTable th').forEach(th => {
+      const key = th.dataset.key;
+      th.innerHTML = th.textContent.replace(/\s*[▲▼]$/, '');
+      if (key === sortKey) th.innerHTML += '<span class="arrow">' + (sortDir === 1 ? '▲' : '▼') + '</span>';
+    });
+  }
+
+  document.querySelectorAll('#mlbGridTable th').forEach(th => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.key;
+      if (sortKey === key) { sortDir *= -1; }
+      else {
+        sortKey = key;
+        sortDir = (key === 'team') ? 1 : -1;
+      }
+      renderGrid();
+    });
+  });
+
+  function render() {
+    if (!mlbData) return;
+    const hasSelection = selectedTeams.length > 0;
+
+    const datasets = mlbData.teams.map(t => {
+      const isHi = selectedTeams.includes(t);
+      const meta = MLB_TEAM_META[t] || { color: '#898781', color2: '#898781' };
+      const lineColor = isHi ? meta.color : 'rgba(137,135,129,0.28)';
+      const dotColor = isHi ? meta.color2 : 'rgba(137,135,129,0.28)';
+      return {
+        label: t, data: mlbData.trend[t][metric],
+        borderColor: lineColor, backgroundColor: dotColor,
+        pointBackgroundColor: dotColor, pointBorderColor: dotColor,
+        borderWidth: isHi ? 3 : 1, pointRadius: isHi ? 2 : 0,
+        order: isHi ? 0 : 1, tension: 0.1
+      };
+    });
+
+    const metricLabels = { win_pct: 'Win PCT', run_diff: 'Run differential', avg_rank: 'Average rank (1 = best)' };
+    note.textContent = (hasSelection ? selectedTeams.join(', ') : 'No teams selected') + ' — ' + metricLabels[metric] + ' by date, ' + mlbData.asOf.slice(0,4) + ' season.';
+
+    const yOptions = metric === 'avg_rank'
+      ? { reverse: true, min: 1, max: mlbData.teams.length, title: { display: true, text: 'Avg rank' } }
+      : { reverse: false, title: { display: true, text: metricLabels[metric] } };
+
+    if (chart) chart.destroy();
+    chart = new Chart(canvas, {
+      type: 'line',
+      data: { labels: mlbData.dates, datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'nearest', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            filter: (item) => !hasSelection || selectedTeams.includes(item.dataset.label),
+            callbacks: { title: (items) => items[0].label, label: (item) => item.dataset.label + ': ' + item.parsed.y }
+          }
+        },
+        scales: {
+          x: { title: { display: true, text: 'Date' }, grid: { display: false }, ticks: { maxTicksLimit: 10 } },
+          y: Object.assign({ grid: { color: 'rgba(137,135,129,0.15)' } }, yOptions)
+        }
+      }
+    });
+  }
+
+  metricBtns.forEach(b => b.addEventListener('click', () => {
+    metricBtns.forEach(x => x.classList.remove('active')); b.classList.add('active');
+    metric = b.dataset.metric; render();
+  }));
+}
 </script>
 </body>
 </html>
