@@ -1,0 +1,213 @@
+name: Update MLB data
+
+on:
+  schedule:
+    # Daily at 11:00 UTC (~6am CT) -- safely after all games from the
+    # previous night (including West Coast) have gone final.
+    - cron: "0 11 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Determine current MLB season
+        id: season
+        run: |
+          YEAR=$(date -u +%Y)
+          echo "season=$YEAR" >> "$GITHUB_OUTPUT"
+
+      - name: Pull season schedule and compute MLB data
+        env:
+          SEASON: ${{ steps.season.outputs.season }}
+        run: |
+          python <<'PYEOF'
+          import json
+          import os
+          from collections import defaultdict
+
+          import requests
+
+          YEAR = os.environ["SEASON"]
+          HFA = 0.525  # fixed home-field-advantage constant, per project decision
+
+          # ---- Pull the full season schedule from MLB's public Stats API ----
+          # NOTE: this is MLB's own internal API, not an officially documented
+          # public contract -- it's widely used (Baseball Savant, etc.) but
+          # unversioned and can change without notice.
+          resp = requests.get(
+              "https://statsapi.mlb.com/api/v1/schedule",
+              params={"sportId": 1, "season": YEAR},
+              timeout=30,
+          )
+          resp.raise_for_status()
+          payload = resp.json()
+
+          games = []
+          for d in payload.get("dates", []):
+              for g in d.get("games", []):
+                  if g.get("gameType") != "R":
+                      continue  # regular season only
+                  games.append(g)
+
+          print(f"Total regular-season games found: {len(games)}")
+
+          # ---- Split into completed vs remaining ----
+          completed = []
+          remaining = []
+          for g in games:
+              state = g.get("status", {}).get("detailedState", "")
+              home = g["teams"]["home"]
+              away = g["teams"]["away"]
+              home_abbr = home["team"].get("abbreviation")
+              away_abbr = away["team"].get("abbreviation")
+              date = g.get("officialDate")
+              if not home_abbr or not away_abbr or not date:
+                  continue
+              if state in ("Final", "Game Over", "Completed Early"):
+                  home_score = home.get("score")
+                  away_score = away.get("score")
+                  if home_score is None or away_score is None:
+                      continue
+                  completed.append({
+                      "date": date, "home": home_abbr, "away": away_abbr,
+                      "home_score": home_score, "away_score": away_score,
+                  })
+              elif state in ("Scheduled", "Pre-Game", "Warmup"):
+                  remaining.append({"date": date, "home": home_abbr, "away": away_abbr})
+              # anything else (Postponed, Cancelled, In Progress, Suspended) is
+              # skipped -- not a completed result and not a reliable remaining game
+
+          print(f"Completed: {len(completed)}, Remaining: {len(remaining)}")
+
+          # ---- Build per-team chronological game log ----
+          team_games = defaultdict(list)  # abbr -> list of (date, own_score, opp_score)
+          for g in completed:
+              team_games[g["home"]].append((g["date"], g["home_score"], g["away_score"]))
+              team_games[g["away"]].append((g["date"], g["away_score"], g["home_score"]))
+
+          teams = sorted(team_games.keys())
+          for t in teams:
+              team_games[t].sort(key=lambda x: x[0])
+
+          # ---- Cumulative wins/losses/run-diff per team per date they played ----
+          team_series = {}  # abbr -> list of (date, wins, losses, run_diff)
+          for t in teams:
+              wins = losses = rd = 0
+              series = []
+              for date, own, opp in team_games[t]:
+                  if own > opp:
+                      wins += 1
+                  else:
+                      losses += 1
+                  rd += (own - opp)
+                  series.append((date, wins, losses, rd))
+              team_series[t] = series
+
+          # ---- Unified date axis: every date any team played ----
+          all_dates = sorted({date for t in teams for date, *_ in team_series[t]})
+
+          # forward-filled per-team lookup by date
+          def build_lookup(series):
+              lookup = {}
+              last = (0, 0, 0)
+              idx = 0
+              for date in all_dates:
+                  while idx < len(series) and series[idx][0] == date:
+                      last = series[idx][1:]
+                      idx += 1
+                  lookup[date] = last
+              return lookup
+
+          team_lookup = {t: build_lookup(team_series[t]) for t in teams}
+
+          trend = {t: {"win_pct": [], "run_diff": [], "avg_rank": []} for t in teams}
+
+          for date in all_dates:
+              win_pcts = {}
+              run_diffs = {}
+              for t in teams:
+                  w, l, rd = team_lookup[t][date]
+                  win_pcts[t] = w / (w + l) if (w + l) > 0 else 0.0
+                  run_diffs[t] = rd
+              wp_rank = {t: r for r, t in enumerate(sorted(teams, key=lambda x: -win_pcts[x]), start=1)}
+              rd_rank = {t: r for r, t in enumerate(sorted(teams, key=lambda x: -run_diffs[x]), start=1)}
+              for t in teams:
+                  trend[t]["win_pct"].append(round(win_pcts[t], 4))
+                  trend[t]["run_diff"].append(run_diffs[t])
+                  trend[t]["avg_rank"].append(round((wp_rank[t] + rd_rank[t]) / 2, 1))
+
+          # ---- Current record + predicted final record ----
+          current_wl = {}
+          current_pct = {}
+          for t in teams:
+              last_date = all_dates[-1]
+              w, l, rd = team_lookup[t][last_date]
+              current_wl[t] = (w, l)
+              current_pct[t] = w / (w + l) if (w + l) > 0 else 0.0
+
+          predicted_wins_extra = defaultdict(float)
+          remaining_count = defaultdict(int)
+          for g in remaining:
+              h, a = g["home"], g["away"]
+              if h not in current_pct or a not in current_pct:
+                  continue
+              hp, ap = current_pct[h], current_pct[a]
+              num = hp * (1 - ap) * HFA
+              den = num + ap * (1 - hp) * (1 - HFA)
+              p_home = num / den if den > 0 else 0.5
+              predicted_wins_extra[h] += p_home
+              predicted_wins_extra[a] += (1 - p_home)
+              remaining_count[h] += 1
+              remaining_count[a] += 1
+
+          predicted = {}
+          for t in teams:
+              w, l = current_wl[t]
+              rem = remaining_count[t]
+              total_games = w + l + rem
+              pred_w = round(w + predicted_wins_extra[t])
+              pred_l = total_games - pred_w
+              predicted[t] = {
+                  "wins": w, "losses": l, "remaining": rem,
+                  "pred_wins": pred_w, "pred_losses": pred_l,
+                  "pred_record": f"{pred_w}-{pred_l}",
+              }
+
+          out = {
+              "asOf": all_dates[-1] if all_dates else None,
+              "teams": teams,
+              "dates": all_dates,
+              "trend": trend,
+              "predicted": predicted,
+          }
+
+          with open("mlb-data.json", "w", encoding="utf-8") as f:
+              json.dump(out, f)
+
+          print(f"Wrote mlb-data.json: {len(teams)} teams, {len(all_dates)} dates.")
+          PYEOF
+
+      - name: Commit and push if data changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add mlb-data.json
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Update MLB data ($(date -u +%F))"
+            git push
+          fi
