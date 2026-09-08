@@ -7,19 +7,39 @@
 <style>
   body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 960px; margin: 24px auto; padding: 0 16px; color: #1a1a1a; }
   h1 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+  h2 { font-size: 16px; font-weight: 600; margin: 28px 0 8px; }
   p.sub { color: #666; font-size: 14px; margin-top: 0; }
   .season-bar { display: flex; align-items: center; gap: 10px; margin: 20px 0; }
   .season-bar label { font-size: 13px; color: #555; }
   .season-bar input { font-size: 16px; padding: 8px 10px; border-radius: 6px; border: 1px solid #ccc; width: 100px; }
   .season-bar .err { font-size: 13px; color: #c0392b; }
-  .controls { display: flex; gap: 16px; flex-wrap: wrap; margin: 16px 0; align-items: center; }
-  .controls label { font-size: 13px; color: #555; margin-right: 6px; }
-  select { font-size: 14px; padding: 6px 10px; border-radius: 6px; border: 1px solid #ccc; background: #fff; }
+
+  table.grid { width: 100%; border-collapse: collapse; font-size: 14px; }
+  table.grid th, table.grid td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #eee; }
+  table.grid th { cursor: pointer; user-select: none; color: #555; font-weight: 600; white-space: nowrap; }
+  table.grid th:hover { color: #2a78d6; }
+  table.grid th .arrow { font-size: 11px; margin-left: 3px; color: #2a78d6; }
+  table.grid td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.grid th.num { text-align: right; }
+  .team-cell { display: flex; align-items: center; gap: 8px; }
+  .team-cell img { width: 22px; height: 22px; object-fit: contain; }
+  .grid-note { font-size: 12px; color: #888; margin-top: 6px; }
+
+  .controls { display: flex; gap: 16px; flex-wrap: wrap; margin: 16px 0; align-items: flex-start; }
+  .controls label { font-size: 13px; color: #555; margin-right: 6px; display: block; margin-bottom: 6px; }
   .toggle-group { display: inline-flex; }
   .toggle-group button { font-size: 14px; padding: 6px 12px; border: 1px solid #ccc; background: #fff; cursor: pointer; border-radius: 0; }
   .toggle-group button:first-child { border-radius: 6px 0 0 6px; }
   .toggle-group button:last-child { border-radius: 0 6px 6px 0; margin-left: -1px; }
   .toggle-group button.active { background: #2a78d6; color: #fff; border-color: #2a78d6; }
+
+  .team-picker { border: 1px solid #ddd; border-radius: 8px; width: 260px; max-height: 180px; overflow-y: auto; padding: 6px; }
+  .team-picker label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #333; padding: 3px 4px; margin: 0; cursor: pointer; border-radius: 4px; }
+  .team-picker label:hover { background: #f2f6fc; }
+  .team-picker img { width: 18px; height: 18px; object-fit: contain; }
+  .team-picker input { margin: 0; }
+  .clear-btn { font-size: 12px; color: #2a78d6; background: none; border: none; cursor: pointer; padding: 4px 0; text-decoration: underline; }
+
   .chart-wrap { position: relative; width: 100%; height: 460px; margin-top: 12px; }
   .note { font-size: 13px; color: #666; margin-top: 10px; }
   #status { font-size: 14px; color: #666; padding: 20px 0; }
@@ -29,7 +49,7 @@
 <body>
 
 <h1>NFL power rankings — UPS / APS+</h1>
-<p class="sub">Win-probability time-weighted results, adjusted for opponent strength. Cumulative season-to-date through each week.</p>
+<p class="sub">Win-probability time-weighted results, adjusted for opponent strength.</p>
 
 <div id="status">Loading data…</div>
 
@@ -41,30 +61,63 @@
     <span class="err" id="seasonErr"></span>
   </div>
 
+  <h2>Current standings</h2>
+  <table class="grid" id="gridTable">
+    <thead>
+      <tr>
+        <th data-key="team">Team</th>
+        <th class="num" data-key="ups_score">UPS</th>
+        <th class="num" data-key="ups_rank">UPS Rank</th>
+        <th class="num" data-key="apsplus_score">APS+</th>
+        <th class="num" data-key="apsplus_rank">APS+ Rank</th>
+      </tr>
+    </thead>
+    <tbody id="gridBody"></tbody>
+  </table>
+  <p class="grid-note" id="gridNote"></p>
+
+  <h2>Weekly movement</h2>
   <div class="controls">
-    <div><label>Team</label><select id="teamSelect"></select></div>
-    <div><label>Metric</label><div class="toggle-group" id="metricToggle">
-      <button data-metric="ups" class="active">UPS</button><button data-metric="apsplus">APS+</button>
-    </div></div>
-    <div><label>View</label><div class="toggle-group" id="viewToggle">
-      <button data-view="score" class="active">Score</button><button data-view="rank">Power ranking (1-32)</button>
-    </div></div>
+    <div>
+      <label>Metric</label>
+      <div class="toggle-group" id="metricToggle">
+        <button data-metric="ups" class="active">UPS</button><button data-metric="apsplus">APS+</button>
+      </div>
+    </div>
+    <div>
+      <label>View</label>
+      <div class="toggle-group" id="viewToggle">
+        <button data-view="score" class="active">Score</button><button data-view="rank">Power ranking (1-32)</button>
+      </div>
+    </div>
+    <div>
+      <label>Highlight teams</label>
+      <div class="team-picker" id="teamPicker"></div>
+      <button class="clear-btn" id="clearTeams">Clear selection</button>
+    </div>
   </div>
   <div class="chart-wrap"><canvas id="rankChart" role="img" aria-label="Weekly team performance chart"></canvas></div>
   <p class="note" id="note"></p>
 </div>
 
-<footer>UPS = Unadjusted Performance Score (100 pts split per game, empirically time-weighted win probability). APS+ = Adjusted Performance Score, indexed to 100 = league average that season. Data: nflverse play-by-play.</footer>
+<footer>UPS = Unadjusted Performance Score (100 pts split per game, empirically time-weighted win probability). APS+ = Adjusted Performance Score, indexed to 100 = league average that season. Data: nflverse play-by-play. Logos &amp; colors: nflverse team reference data.</footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
+const TEAM_META = {"ARI": {"name": "Cardinals", "color": "#97233F", "color2": "#000000", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/ari.png"}, "ATL": {"name": "Falcons", "color": "#A71930", "color2": "#000000", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/atl.png"}, "BAL": {"name": "Ravens", "color": "#241773", "color2": "#9E7C0C", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/bal.png"}, "BUF": {"name": "Bills", "color": "#00338D", "color2": "#C60C30", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/buf.png"}, "CAR": {"name": "Panthers", "color": "#0085CA", "color2": "#000000", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/car.png"}, "CHI": {"name": "Bears", "color": "#0B162A", "color2": "#E64100", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/chi.png"}, "CIN": {"name": "Bengals", "color": "#FB4F14", "color2": "#000000", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/cin.png"}, "CLE": {"name": "Browns", "color": "#FF3C00", "color2": "#311D00", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/cle.png"}, "DAL": {"name": "Cowboys", "color": "#002244", "color2": "#B0B7BC", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/dal.png"}, "DEN": {"name": "Broncos", "color": "#002244", "color2": "#FB4F14", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/den.png"}, "DET": {"name": "Lions", "color": "#0076B6", "color2": "#B0B7BC", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/det.png"}, "GB": {"name": "Packers", "color": "#203731", "color2": "#FFB612", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/gb.png"}, "HOU": {"name": "Texans", "color": "#03202F", "color2": "#A71930", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/hou.png"}, "IND": {"name": "Colts", "color": "#002C5F", "color2": "#a5acaf", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/ind.png"}, "JAX": {"name": "Jaguars", "color": "#006778", "color2": "#000000", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/jax.png"}, "KC": {"name": "Chiefs", "color": "#E31837", "color2": "#FFB612", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/kc.png"}, "LA": {"name": "Rams", "color": "#003594", "color2": "#FFD100", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/lar.png"}, "LAC": {"name": "Chargers", "color": "#007BC7", "color2": "#ffc20e", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/lac.png"}, "LV": {"name": "Raiders", "color": "#000000", "color2": "#A5ACAF", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/lv.png"}, "MIA": {"name": "Dolphins", "color": "#008E97", "color2": "#F58220", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/mia.png"}, "MIN": {"name": "Vikings", "color": "#4F2683", "color2": "#FFC62F", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/min.png"}, "NE": {"name": "Patriots", "color": "#002244", "color2": "#C60C30", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/ne.png"}, "NO": {"name": "Saints", "color": "#D3BC8D", "color2": "#000000", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/no.png"}, "NYG": {"name": "Giants", "color": "#0B2265", "color2": "#A71930", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/nyg.png"}, "NYJ": {"name": "Jets", "color": "#003F2D", "color2": "#000000", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/nyj.png"}, "PHI": {"name": "Eagles", "color": "#004C54", "color2": "#A5ACAF", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/phi.png"}, "PIT": {"name": "Steelers", "color": "#000000", "color2": "#FFB612", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/pit.png"}, "SEA": {"name": "Seahawks", "color": "#002244", "color2": "#69be28", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/sea.png"}, "SF": {"name": "49ers", "color": "#AA0000", "color2": "#B3995D", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/sf.png"}, "TB": {"name": "Buccaneers", "color": "#A71930", "color2": "#322F2B", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/tb.png"}, "TEN": {"name": "Titans", "color": "#4495D2", "color2": "#D50A0A", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/ten.png"}, "WAS": {"name": "Commanders", "color": "#5A1414", "color2": "#FFB612", "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/wsh.png"}};
+
+const LAST_TEAMS_KEY = "nfl-power-rankings-last-teams";
+
 const statusEl = document.getElementById('status');
 const appEl = document.getElementById('app');
 const seasonInput = document.getElementById('seasonInput');
 const seasonErr = document.getElementById('seasonErr');
-const teamSelect = document.getElementById('teamSelect');
+const gridBody = document.getElementById('gridBody');
+const gridNote = document.getElementById('gridNote');
 const metricBtns = document.querySelectorAll('#metricToggle button');
 const viewBtns = document.querySelectorAll('#viewToggle button');
+const teamPicker = document.getElementById('teamPicker');
+const clearTeamsBtn = document.getElementById('clearTeams');
 const canvas = document.getElementById('rankChart');
 const note = document.getElementById('note');
 
@@ -72,6 +125,14 @@ let SEASONS = null;
 let currentData = null;
 let chart = null;
 const state = { metric: 'ups', view: 'score' };
+let selectedTeams = [];
+let sortKey = 'apsplus_rank';
+let sortDir = 1;
+
+try {
+  const saved = JSON.parse(localStorage.getItem(LAST_TEAMS_KEY) || '[]');
+  if (Array.isArray(saved)) selectedTeams = saved;
+} catch (e) { selectedTeams = []; }
 
 fetch('data.json?_=' + Date.now())
   .then(r => {
@@ -114,15 +175,104 @@ function loadSeason(yr) {
   }
   seasonErr.textContent = '';
   currentData = d;
-  teamSelect.innerHTML = '';
-  currentData.teams.forEach(t => {
-    const o = document.createElement('option');
-    o.value = t; o.textContent = t;
-    teamSelect.appendChild(o);
-  });
-  teamSelect.value = currentData.teams.includes('SEA') ? 'SEA' : currentData.teams[0];
+  buildTeamPicker();
+  renderGrid();
   render();
 }
+
+function teamLogo(abbr, size) {
+  const meta = TEAM_META[abbr];
+  const src = meta ? meta.logo : '';
+  return '<img src="' + src + '" alt="" width="' + size + '" height="' + size + '" loading="lazy">';
+}
+
+function buildTeamPicker() {
+  teamPicker.innerHTML = '';
+  currentData.teams.forEach(t => {
+    const id = 'team-chk-' + t;
+    const wrap = document.createElement('label');
+    wrap.innerHTML =
+      '<input type="checkbox" id="' + id + '" value="' + t + '"' + (selectedTeams.includes(t) ? ' checked' : '') + '>' +
+      teamLogo(t, 18) + '<span>' + t + '</span>';
+    teamPicker.appendChild(wrap);
+  });
+  teamPicker.querySelectorAll('input[type=checkbox]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const t = cb.value;
+      if (cb.checked) {
+        if (!selectedTeams.includes(t)) selectedTeams.push(t);
+      } else {
+        selectedTeams = selectedTeams.filter(x => x !== t);
+      }
+      localStorage.setItem(LAST_TEAMS_KEY, JSON.stringify(selectedTeams));
+      render();
+    });
+  });
+}
+
+clearTeamsBtn.addEventListener('click', () => {
+  selectedTeams = [];
+  localStorage.setItem(LAST_TEAMS_KEY, JSON.stringify(selectedTeams));
+  teamPicker.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false);
+  render();
+});
+
+// ---------- Grid ----------
+
+function renderGrid() {
+  const lastWeekIdx = currentData.weeks.length - 1;
+  const lastWeek = currentData.weeks[lastWeekIdx];
+  gridNote.textContent = 'Through week ' + lastWeek + ', ' + currentData.season + ' season.';
+
+  let rows = currentData.teams.map(t => ({
+    team: t,
+    ups_score: currentData.data[t].ups_score[lastWeekIdx],
+    ups_rank: currentData.data[t].ups_rank[lastWeekIdx],
+    apsplus_score: currentData.data[t].apsplus_score[lastWeekIdx],
+    apsplus_rank: currentData.data[t].apsplus_rank[lastWeekIdx],
+  }));
+
+  rows.sort((a, b) => {
+    let av = a[sortKey], bv = b[sortKey];
+    if (sortKey === 'team') { av = a.team; bv = b.team; return sortDir * av.localeCompare(bv); }
+    return sortDir * ((av ?? 0) - (bv ?? 0));
+  });
+
+  gridBody.innerHTML = rows.map(r => {
+    const meta = TEAM_META[r.team] || { name: r.team };
+    return '<tr>' +
+      '<td><div class="team-cell">' + teamLogo(r.team, 22) + '<span>' + r.team + ' — ' + meta.name + '</span></div></td>' +
+      '<td class="num">' + r.ups_score + '</td>' +
+      '<td class="num">' + r.ups_rank + '</td>' +
+      '<td class="num">' + r.apsplus_score + '</td>' +
+      '<td class="num">' + r.apsplus_rank + '</td>' +
+      '</tr>';
+  }).join('');
+
+  document.querySelectorAll('#gridTable th').forEach(th => {
+    const key = th.dataset.key;
+    th.innerHTML = th.textContent.replace(/\s*[▲▼]$/, '');
+    if (key === sortKey) {
+      th.innerHTML += '<span class="arrow">' + (sortDir === 1 ? '▲' : '▼') + '</span>';
+    }
+  });
+}
+
+document.querySelectorAll('#gridTable th').forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.key;
+    if (sortKey === key) {
+      sortDir *= -1;
+    } else {
+      sortKey = key;
+      sortDir = (key === 'team') ? 1 : -1; // scores/ranks default to descending-quality order
+      if (key === 'apsplus_rank' || key === 'ups_rank') sortDir = 1; // rank 1 = best, ascending
+    }
+    renderGrid();
+  });
+});
+
+// ---------- Chart ----------
 
 function seriesKey() {
   if (state.view === 'rank') return state.metric === 'ups' ? 'ups_rank' : 'apsplus_rank';
@@ -131,18 +281,23 @@ function seriesKey() {
 
 function render() {
   if (!currentData) return;
-  const highlighted = teamSelect.value;
   const key = seriesKey();
+  const hasSelection = selectedTeams.length > 0;
 
   const datasets = currentData.teams.map(t => {
-    const isHi = t === highlighted;
+    const isHi = selectedTeams.includes(t);
+    const meta = TEAM_META[t] || { color: '#898781', color2: '#898781' };
+    const lineColor = isHi ? meta.color : 'rgba(137,135,129,0.28)';
+    const dotColor = isHi ? meta.color2 : 'rgba(137,135,129,0.28)';
     return {
       label: t,
       data: currentData.data[t][key],
-      borderColor: isHi ? '#2a78d6' : 'rgba(137,135,129,0.30)',
-      backgroundColor: isHi ? '#2a78d6' : 'rgba(137,135,129,0.30)',
+      borderColor: lineColor,
+      backgroundColor: dotColor,
+      pointBackgroundColor: dotColor,
+      pointBorderColor: dotColor,
       borderWidth: isHi ? 3 : 1,
-      pointRadius: isHi ? 3 : 0,
+      pointRadius: isHi ? 4 : 0,
       order: isHi ? 0 : 1,
       tension: 0.15
     };
@@ -150,7 +305,7 @@ function render() {
 
   const metricLabel = state.metric === 'ups' ? 'UPS' : 'APS+';
   const viewLabel = state.view === 'rank' ? 'power ranking (1 = best)' : 'score';
-  note.textContent = highlighted + ' weekly ' + metricLabel + ' ' + viewLabel + ', ' + currentData.season + ' season (cumulative season-to-date).';
+  note.textContent = (hasSelection ? selectedTeams.join(', ') : 'No teams selected') + ' — weekly ' + metricLabel + ' ' + viewLabel + ', ' + currentData.season + ' season.';
 
   const yOptions = state.view === 'rank'
     ? { reverse: true, min: 1, max: 32, ticks: { stepSize: 4 }, title: { display: true, text: 'Rank' } }
@@ -167,7 +322,7 @@ function render() {
       plugins: {
         legend: { display: false },
         tooltip: {
-          filter: (item) => item.dataset.label === highlighted,
+          filter: (item) => !hasSelection || selectedTeams.includes(item.dataset.label),
           callbacks: {
             title: (items) => 'Week ' + items[0].label,
             label: (item) => item.dataset.label + ': ' + item.parsed.y
@@ -182,7 +337,6 @@ function render() {
   });
 }
 
-teamSelect.addEventListener('change', render);
 metricBtns.forEach(b => b.addEventListener('click', () => {
   metricBtns.forEach(x => x.classList.remove('active'));
   b.classList.add('active');
