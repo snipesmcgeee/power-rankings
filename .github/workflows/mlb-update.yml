@@ -76,9 +76,20 @@ jobs:
           print(f"Total regular-season games found: {len(games)}")
 
           # ---- Split into completed vs remaining ----
-          # A game counts as "completed" if both teams have a recorded score --
-          # this is more robust than matching MLB's exact status text, which
-          # isn't documented and can vary.
+          # A game counts as "completed" if both teams have a recorded score and
+          # the game is not live -- more robust than matching MLB's exact status
+          # text, which isn't documented and can vary.
+          # A game counts as "remaining" only if it has no score AND is not
+          # postponed / cancelled / suspended. Those games are rescheduled as
+          # separate entries, so counting them here double-counts and inflates
+          # remaining games (which skewed predicted records, e.g. 84-82).
+          def is_dead(g):
+              s = (g.get("status", {}).get("detailedState") or "").lower()
+              return any(w in s for w in ("postpone", "cancel", "suspend"))
+
+          def is_live(g):
+              return g.get("status", {}).get("abstractGameState") == "Live"
+
           completed = []
           remaining = []
           for g in games:
@@ -91,6 +102,8 @@ jobs:
                   continue
               home_score = home.get("score")
               away_score = away.get("score")
+              if is_dead(g) or is_live(g):
+                  continue  # postponed / cancelled / suspended / in progress: neither final nor remaining
               if home_score is not None and away_score is not None:
                   completed.append({
                       "date": date, "home": home_abbr, "away": away_abbr,
@@ -100,6 +113,14 @@ jobs:
                   remaining.append({"date": date, "home": home_abbr, "away": away_abbr})
 
           print(f"Completed: {len(completed)}, Remaining: {len(remaining)}")
+
+          # ---- Offseason guard ----
+          # Before Opening Day (and after the calendar flips to a new year) the
+          # schedule has no completed games. Writing then would replace the last
+          # season's final data with an empty file, so keep the existing file.
+          if not completed:
+              print("No completed games yet for this season -- keeping existing mlb-data.json.")
+              raise SystemExit(0)
 
           # ---- Build per-team chronological game log ----
           team_games = defaultdict(list)  # abbr -> list of (date, own_score, opp_score)
