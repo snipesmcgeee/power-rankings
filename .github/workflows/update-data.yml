@@ -154,6 +154,225 @@ jobs:
               json.dump(all_seasons, f)
 
           print(f"Updated {YEAR} in data.json ({len(weeks)} weeks, {len(teams)} teams).")
+
+          # ===================================================================
+          # Projections: division-winner odds and conference-championship-game odds
+          # Season simulation (3,000 runs) built on results-only team strengths:
+          #   strength = regularized opponent-adjusted UPS this season + last season's UPS,
+          #   blended with coefficients fit on 2000-2025 (by weeks remaining).
+          # Wrapped in try/except so a failure here never blocks the data.json update.
+          # ===================================================================
+          try:
+              import datetime
+              import io
+
+              DIVISIONS = {
+                  "AFC East": ["BUF", "MIA", "NE", "NYJ"],
+                  "AFC North": ["BAL", "CIN", "CLE", "PIT"],
+                  "AFC South": ["HOU", "IND", "JAX", "TEN"],
+                  "AFC West": ["DEN", "KC", "LV", "LAC"],
+                  "NFC East": ["DAL", "NYG", "PHI", "WAS"],
+                  "NFC North": ["CHI", "DET", "GB", "MIN"],
+                  "NFC South": ["ATL", "CAR", "NO", "TB"],
+                  "NFC West": ["ARI", "LA", "SF", "SEA"],
+              }
+              RIDGE_LAMBDA = 15.0
+
+
+              def sig(x):
+                  return 1.0 / (1.0 + np.exp(-x))
+
+
+              def adjust_long(long, hfa):
+                  """long: columns week, team, opp, ups, home(1/0). Returns Series of home-field-adjusted UPS."""
+                  return long["ups"] - np.where(long["home"] == 1, hfa, -hfa)
+
+
+              def ridge_strengths(long, hfa, lam=RIDGE_LAMBDA):
+                  """Simultaneous opponent-adjusted team strengths (UPS points vs. average)."""
+                  adj = adjust_long(long, hfa).values - 50.0
+                  teams = sorted(set(long["team"]) | set(long["opp"]))
+                  ix = {t: i for i, t in enumerate(teams)}
+                  X = np.zeros((len(long), len(teams)))
+                  for r, (t, o) in enumerate(zip(long["team"], long["opp"])):
+                      X[r, ix[t]] = 1.0
+                      X[r, ix[o]] = -1.0
+                  s = np.linalg.solve(X.T @ X + lam * np.eye(len(teams)), X.T @ adj)
+                  return pd.Series(s, index=teams)
+
+
+              def predict_ratings(long, prior, coefs, hfa):
+                  """Rating = predicted UPS in remaining games minus 50. coefs = [intercept, c_ridge, c_prior]."""
+                  s = ridge_strengths(long, hfa)
+                  out = {}
+                  for t in DIVISIONS_TEAMS:
+                      sr = float(s.get(t, 0.0))
+                      pr = float(prior.get(t, 50.0))
+                      out[t] = coefs[0] + coefs[1] * sr + coefs[2] * pr - 50.0
+                  return out
+
+
+              DIVISIONS_TEAMS = [t for v in DIVISIONS.values() for t in v]
+
+
+              def simulate(r, wins0, remaining, n_wc, b, hfa, n_sims=3000, seed=1):
+                  """r: {team: rating}; wins0: {team: wins so far}; remaining: list of (home, away).
+                  Returns (p_division {team: prob}, p_finalist {team: prob of reaching conference title game})."""
+                  rng = np.random.default_rng(seed)
+                  teams = DIVISIONS_TEAMS
+                  ix = {t: i for i, t in enumerate(teams)}
+                  rv = np.array([r[t] for t in teams])
+                  w0 = np.array([wins0.get(t, 0.0) for t in teams])
+                  wins = np.tile(w0, (n_sims, 1))
+                  if remaining:
+                      hh = np.array([ix[h] for h, a in remaining])
+                      aa = np.array([ix[a] for h, a in remaining])
+                      ph = sig(b * (rv[hh] - rv[aa] + hfa))
+                      out = rng.random((n_sims, len(remaining))) < ph
+                      for j in range(len(remaining)):
+                          wins[:, hh[j]] += out[:, j]
+                          wins[:, aa[j]] += ~out[:, j]
+                  wins = wins + rng.random(wins.shape) * 0.01  # random tiebreak
+                  div_idx = {d: [ix[t] for t in ts] for d, ts in DIVISIONS.items()}
+                  conf_div = {c: [d for d in DIVISIONS if d.startswith(c)] for c in ("AFC", "NFC")}
+                  conf_teams = {c: [ix[t] for d in conf_div[c] for t in DIVISIONS[d]] for c in ("AFC", "NFC")}
+                  p_div = np.zeros(len(teams))
+                  p_fin = np.zeros(len(teams))
+
+                  def play(h, a):
+                      return h if rng.random() < sig(b * (rv[h] - rv[a] + hfa)) else a
+
+                  for i in range(n_sims):
+                      w = wins[i]
+                      for c in ("AFC", "NFC"):
+                          winners = []
+                          for d in conf_div[c]:
+                              m = div_idx[d]
+                              wv = m[int(np.argmax(w[m]))]
+                              winners.append(wv)
+                              p_div[wv] += 1
+                          winners.sort(key=lambda q: -w[q])
+                          rest = sorted([q for q in conf_teams[c] if q not in winners], key=lambda q: -w[q])[:n_wc]
+                          seeds = winners + rest
+                          if len(seeds) == 6:
+                              alive = [seeds[0], seeds[1], play(seeds[2], seeds[5]), play(seeds[3], seeds[4])]
+                          else:
+                              alive = [seeds[0], play(seeds[1], seeds[6]), play(seeds[2], seeds[5]), play(seeds[3], seeds[4])]
+                          order = sorted(alive, key=lambda q: seeds.index(q))
+                          for q in (play(order[0], order[3]), play(order[1], order[2])):
+                              p_fin[q] += 1
+                  p_div /= n_sims
+                  p_fin /= n_sims
+                  return ({t: float(p_div[ix[t]]) for t in teams}, {t: float(p_fin[ix[t]]) for t in teams})
+
+              PROJ_COEFS = {"1": [38.3966, 0.8855, 0.2315], "2": [45.838, 0.9753, 0.0841], "3": [44.19, 0.9655, 0.1168], "4": [43.5048, 0.9798, 0.1299], "5": [44.2794, 1.0541, 0.1144], "6": [45.3847, 1.0836, 0.093], "7": [45.2296, 1.0914, 0.0961], "8": [44.8564, 0.9953, 0.1035], "9": [43.8282, 0.9234, 0.124], "10": [43.457, 0.9658, 0.1311], "11": [41.9221, 0.9694, 0.1618], "12": [40.4561, 0.9186, 0.1907], "13": [38.9474, 0.8965, 0.2207], "14": [37.3725, 0.8484, 0.2525], "15": [34.5854, 0.753, 0.3083], "16": [32.6354, 0.767, 0.3482], "17": [31.7118, 0.3637, 0.3659]}
+              PROJ_B = np.float64(0.0626)
+              PROJ_HFA = np.float64(5.4)
+              N_SIMS = 3000
+
+              sched_url = "https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv"
+              sch = pd.read_csv(io.StringIO(urllib.request.urlopen(sched_url, timeout=60).read().decode("utf-8")))
+              sch = sch[(sch.season == YEAR) & (sch.game_type == "REG")].copy()
+              CODE_FIX = {"STL": "LA", "SD": "LAC", "OAK": "LV", "LAR": "LA", "WSH": "WAS", "JAC": "JAX"}
+              sch["home_team"] = sch["home_team"].replace(CODE_FIX)
+              sch["away_team"] = sch["away_team"].replace(CODE_FIX)
+              sch = sch[sch.home_team.isin(DIVISIONS_TEAMS) & sch.away_team.isin(DIVISIONS_TEAMS)]
+              if sch.empty:
+                  raise RuntimeError("no schedule found for " + str(YEAR))
+
+              done = sch[sch.home_score.notna() & sch.away_score.notna()]
+              todo = sch[sch.home_score.isna() | sch.away_score.isna()]
+              wins0 = {}
+              for _, g in done.iterrows():
+                  hw = 1.0 if g.home_score > g.away_score else (0.5 if g.home_score == g.away_score else 0.0)
+                  wins0[g.home_team] = wins0.get(g.home_team, 0.0) + hw
+                  wins0[g.away_team] = wins0.get(g.away_team, 0.0) + (1.0 - hw)
+              remaining = list(zip(todo.home_team, todo.away_team))
+
+              # last completed week = largest week such that every game in weeks <= that week is final
+              n_complete = 0
+              for wk in sorted(sch.week.unique()):
+                  part_ = sch[sch.week == wk]
+                  if part_.home_score.notna().all() and part_.away_score.notna().all():
+                      n_complete = int(wk)
+                  else:
+                      break
+              total_weeks = int(sch.week.max())
+              k_left = max(total_weeks - n_complete, 1)
+              coefs = PROJ_COEFS[str(min(k_left, max(int(x) for x in PROJ_COEFS)))]
+
+              prior_ups = {}
+              prev = all_seasons.get(str(YEAR - 1))
+              if prev:
+                  for t_, v_ in prev["data"].items():
+                      if v_["ups_score"] and v_["ups_score"][-1] is not None:
+                          prior_ups[t_] = v_["ups_score"][-1]
+
+              lg = pd.concat([
+                  allg.assign(team=allg["home"], opp=allg["away"], ups=allg["home_pts"], home=1)[["week", "team", "opp", "ups", "home"]],
+                  allg.assign(team=allg["away"], opp=allg["home"], ups=allg["away_pts"], home=0)[["week", "team", "opp", "ups", "home"]],
+              ], ignore_index=True)
+              ratings = predict_ratings(lg, prior_ups, coefs, PROJ_HFA)
+
+              n_wc = 3 if YEAR >= 2020 else 2
+              p_div, p_fin = simulate(ratings, wins0, remaining, n_wc, PROJ_B, PROJ_HFA,
+                                      n_sims=N_SIMS, seed=YEAR * 100 + n_complete)
+
+              proj = {
+                  "season": YEAR,
+                  "asOf": datetime.datetime.utcnow().strftime("%Y-%m-%d"),
+                  "through_week": n_complete,
+                  "games_remaining": len(remaining),
+                  "n_sims": N_SIMS,
+                  "regular_season_complete": len(remaining) == 0,
+                  "division": {
+                      d: sorted([{"team": t, "p": round(p_div[t], 4)} for t in ts], key=lambda x: -x["p"])
+                      for d, ts in DIVISIONS.items()
+                  },
+                  "conference": {
+                      c: sorted([{"team": t, "p": round(p_fin[t], 4)}
+                                 for d, ts in DIVISIONS.items() if d.startswith(c) for t in ts], key=lambda x: -x["p"])
+                      for c in ("AFC", "NFC")
+                  },
+              }
+              with open("projections.json", "w", encoding="utf-8") as f:
+                  json.dump(proj, f)
+              print(f"Wrote projections.json (through week {n_complete}, {len(remaining)} games remaining).")
+          except Exception as e:
+              print("Projection step skipped:", repr(e))
+
+          # ---- Upcoming-week matchups (independent of the projection step) ----
+          try:
+              import datetime as _dtm
+              import io as _io, urllib.request as _ur
+              import pandas as _pd
+              _u = "https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv"
+              _s = _pd.read_csv(_io.StringIO(_ur.urlopen(_u, timeout=60).read().decode("utf-8")))
+              _s = _s[(_s.season == int(YEAR)) & (_s.game_type == "REG")].copy()
+              _fix = {"STL": "LA", "SD": "LAC", "OAK": "LV", "LAR": "LA", "WSH": "WAS", "JAC": "JAX"}
+              _s["home_team"] = _s["home_team"].replace(_fix)
+              _s["away_team"] = _s["away_team"].replace(_fix)
+              if _s.empty:
+                  raise RuntimeError("no schedule found for " + str(YEAR))
+              _all = sorted(set(_s.home_team) | set(_s.away_team))
+              _open = _s[_s.home_score.isna() | _s.away_score.isna()]
+              _games, _byes, _wk = [], [], None
+              if not _open.empty:
+                  _wk = int(_open.week.min())
+                  _w = _s[_s.week == _wk].sort_values(["gameday", "gametime"])
+                  for _, _g in _w.iterrows():
+                      _games.append({
+                          "away": _g.away_team, "home": _g.home_team,
+                          "gameday": str(_g.gameday), "gametime": None if _pd.isna(_g.gametime) else str(_g.gametime),
+                          "spread": None if _pd.isna(_g.spread_line) else float(_g.spread_line),
+                      })
+                  _byes = sorted(set(_all) - set(_w.home_team) - set(_w.away_team))
+              with open("matchups.json", "w", encoding="utf-8") as f:
+                  json.dump({"season": int(YEAR), "week": _wk, "games": _games, "byes": _byes,
+                             "asOf": _dtm.datetime.utcnow().strftime("%Y-%m-%d")}, f)
+              print(f"Wrote matchups.json (week {_wk}, {len(_games)} games).")
+          except Exception as e:
+              print("Matchups step skipped:", repr(e))
           PYEOF
 
       - name: Commit and push if data changed
@@ -161,6 +380,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data.json
+          if [ -f projections.json ]; then git add projections.json; fi
+          if [ -f matchups.json ]; then git add matchups.json; fi
           if git diff --cached --quiet; then
             echo "No changes to commit."
           else

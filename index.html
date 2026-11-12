@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Power Rankings — NFL / MLB</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231f5fae'/%3E%3Cpolygon points='3,22 7,24 11,20 15,22 19,16 22,13 26,11.5 26,17 3,17' fill='%23ffffff' fill-opacity='0.34'/%3E%3Cg stroke='%23ffffff' stroke-opacity='0.6' stroke-width='0.8'%3E%3Cline x1='7' y1='24' x2='7' y2='17'/%3E%3Cline x1='11' y1='20' x2='11' y2='17'/%3E%3Cline x1='15' y1='22' x2='15' y2='17'/%3E%3Cline x1='19' y1='16' x2='19' y2='17'/%3E%3Cline x1='22' y1='13' x2='22' y2='17'/%3E%3Cline x1='26' y1='11.5' x2='26' y2='17'/%3E%3C/g%3E%3Cline x1='3' y1='17' x2='26' y2='17' stroke='%23ffffff' stroke-opacity='0.85' stroke-width='1'/%3E%3Cpolyline points='3,22 7,24 11,20 15,22 19,16 22,13 26,11.5' fill='none' stroke='%23ffffff' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='26' cy='11.5' r='2.1' fill='%23ffffff'/%3E%3Cpolygon points='22,8 22,3.5 24,5.5 26,2.5 28,5.5 30,3.5 30,8' fill='%23f5b301'/%3E%3C/svg%3E">
 <style>
   body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 960px; margin: 24px auto; padding: 0 16px; color: #1a1a1a; }
   h1 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
@@ -50,6 +51,39 @@
   .chart-wrap { position: relative; width: 100%; height: 460px; margin-top: 12px; }
   .note { font-size: 13px; color: #666; margin-top: 10px; }
   .status-msg { font-size: 14px; color: #666; padding: 20px 0; }
+
+  h3 { font-size: 14px; font-weight: 600; margin: 22px 0 8px; color: #333; }
+  .match-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+  .match-card { border: 1px solid #e6e6e6; border-radius: 10px; padding: 10px 12px 12px; }
+  .match-when { font-size: 12px; color: #777; margin-bottom: 8px; }
+  .match-teams { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 6px; }
+  .match-team { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 15px; }
+  .match-team.home { justify-content: flex-end; flex-direction: row-reverse; }
+  .match-team img { width: 28px; height: 28px; object-fit: contain; }
+  .match-at { font-size: 12px; color: #999; }
+  .match-rows { margin-top: 8px; font-size: 13px; }
+  .match-row { display: grid; grid-template-columns: 1fr 52px 1fr; padding: 3px 0; border-top: 1px solid #f0f0f0; font-variant-numeric: tabular-nums; }
+  .match-row .lab { text-align: center; color: #888; font-size: 12px; }
+  .match-row .v { color: #555; }
+  .match-row .v.r { text-align: right; }
+  .match-row .v.fav { color: #1a1a1a; font-weight: 700; }
+  .match-row .v small { color: #999; font-weight: 400; margin: 0 3px; }
+  .match-foot { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; font-size: 12px; }
+  .chip { padding: 2px 8px; border-radius: 10px; background: #f1f3f6; color: #444; }
+  .chip.agree { background: #e6f4ea; color: #1e6b34; }
+  .chip.split { background: #fff4de; color: #8a5a00; }
+  .pie-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+  .pie-card { border: 1px solid #e6e6e6; border-radius: 10px; padding: 10px 12px 12px; }
+  .pie-card .pie-title { font-size: 13px; font-weight: 600; color: #444; margin-bottom: 4px; text-align: center; }
+  .pie-card .pie-wrap { position: relative; height: 130px; }
+  .pie-legend { list-style: none; margin: 8px 0 0; padding: 0; font-size: 13px; }
+  .pie-legend li { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+  .pie-legend .swatch { width: 10px; height: 10px; border-radius: 2px; flex: none; border: 1px solid rgba(0,0,0,0.15); }
+  .pie-legend img { width: 16px; height: 16px; object-fit: contain; flex: none; }
+  .pie-legend .pct { margin-left: auto; font-variant-numeric: tabular-nums; color: #333; font-weight: 600; }
+  .conf-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+  .conf-card .conf-title { font-size: 13px; font-weight: 600; color: #444; margin-bottom: 4px; }
+  .conf-card .conf-wrap { position: relative; height: 420px; }
   footer { margin-top: 40px; font-size: 12px; color: #999; }
 </style>
 </head>
@@ -113,9 +147,28 @@
     </div>
     <div class="chart-wrap"><canvas id="nflChart" role="img" aria-label="Weekly NFL team performance chart"></canvas></div>
     <p class="note" id="nflNote"></p>
+
+    <h2 id="nflMatchHead">Weekly matchups</h2>
+    <p class="grid-note" id="nflMatchNote"></p>
+    <div class="match-grid" id="nflMatchGrid"></div>
+    <p class="grid-note" id="nflMatchBye"></p>
+
+    <h2 id="nflProjHead">Playoff outlook</h2>
+    <p class="grid-note" id="nflProjNote"></p>
+    <div id="nflProjBody" style="display:none;">
+      <h3>Division winner odds</h3>
+      <div class="pie-grid" id="nflDivGrid"></div>
+      <h3>Conference championship game odds</h3>
+      <p class="grid-note">Each conference sends two teams to its championship game, so each conference's bars add up to 200%.</p>
+      <div class="conf-grid">
+        <div class="conf-card"><div class="conf-title">AFC</div><div class="conf-wrap"><canvas id="nflConfAFC" role="img" aria-label="AFC championship game odds by team"></canvas></div></div>
+        <div class="conf-card"><div class="conf-title">NFC</div><div class="conf-wrap"><canvas id="nflConfNFC" role="img" aria-label="NFC championship game odds by team"></canvas></div></div>
+      </div>
+      <p class="note" id="nflProjMethod"></p>
+    </div>
   </div>
 
-  <footer>UPS = Unadjusted Performance Score (100 pts split per game, empirically time-weighted win probability). APS+ = Adjusted Performance Score, indexed to 100 = league average that season. Data: nflverse play-by-play. Logos &amp; colors: nflverse team reference data.</footer>
+  <footer>UPS = Unadjusted Performance Score (100 pts split per game, empirically time-weighted win probability). APS+ = Adjusted Performance Score, indexed to 100 = league average that season. Playoff odds: Monte Carlo simulation of the remaining schedule (estimate; simplified tiebreakers). Data: nflverse play-by-play. Logos &amp; colors: nflverse team reference data.</footer>
 </div>
 
 <!-- ============================= MLB PANEL ============================= -->
@@ -254,6 +307,8 @@ function teamLogoImg(meta, size) {
     buildTeamPicker();
     renderGrid();
     render();
+    if (window.nflMatchHook) window.nflMatchHook(yr, d);
+    if (window.nflProjHook) window.nflProjHook(yr);
   }
 
   function buildTeamPicker() {
@@ -390,6 +445,246 @@ function teamLogoImg(meta, size) {
     viewBtns.forEach(x => x.classList.remove('active')); b.classList.add('active');
     state.view = b.dataset.view; render();
   }));
+})();
+
+
+// ===================================================================
+// NFL weekly matchups (away left, home right)
+// Reads matchups.json, written by the weekly NFL workflow (current season only).
+// "Favors" compares each team's latest UPS and APS+ and ignores home field.
+// Spread is the closing/current market line from nflverse (reference only).
+// ===================================================================
+(function initNflMatchups() {
+  const headEl = document.getElementById('nflMatchHead');
+  const noteEl = document.getElementById('nflMatchNote');
+  const gridEl = document.getElementById('nflMatchGrid');
+  const byeEl = document.getElementById('nflMatchBye');
+  let mu = null, muFailed = false, shownYear = null, shownData = null;
+
+  function last(arr) {
+    if (!arr) return null;
+    for (let i = arr.length - 1; i >= 0; i--) if (arr[i] !== null && arr[i] !== undefined) return { v: arr[i], i };
+    return null;
+  }
+  function stat(d, t, key, rkey) {
+    const td = d.data[t];
+    if (!td) return { v: null, r: null };
+    const l = last(td[key]);
+    if (!l) return { v: null, r: null };
+    return { v: l.v, r: td[rkey] ? td[rkey][l.i] : null };
+  }
+  function when(g) {
+    if (!g.gameday) return '';
+    const dt = new Date(g.gameday + 'T12:00:00');
+    let s = dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    if (g.gametime) {
+      const p = g.gametime.split(':'); let hh = parseInt(p[0], 10); const mm = p[1];
+      const ap = hh >= 12 ? 'PM' : 'AM'; hh = hh % 12 || 12;
+      s += ' · ' + hh + ':' + mm + ' ' + ap + ' ET';
+    }
+    return s;
+  }
+  function side(t, home) {
+    const meta = NFL_TEAM_META[t] || { name: t };
+    return '<div class="match-team ' + (home ? 'home' : 'away') + '">' + teamLogoImg(meta, 28) + '<span>' + t + '</span></div>';
+  }
+  function cell(s, fav, right) {
+    const val = s.v === null ? '—' : s.v.toFixed(1);
+    const rk = s.r ? '<small>#' + s.r + '</small>' : '';
+    return '<div class="v' + (right ? ' r' : '') + (fav ? ' fav' : '') + '">' + (right ? rk + val : val + rk) + '</div>';
+  }
+  function favored(a, h, at, ht) {
+    if (a.v === null || h.v === null || a.v === h.v) return null;
+    return a.v > h.v ? at : ht;
+  }
+  function spreadText(g) {
+    if (g.spread === null || g.spread === undefined) return null;
+    if (g.spread === 0) return "Spread: pick'em";
+    const fav = g.spread > 0 ? g.home : g.away;
+    return 'Spread: ' + fav + ' −' + Math.abs(g.spread).toFixed(1);
+  }
+  function render(yr, d) {
+    gridEl.innerHTML = ''; byeEl.textContent = '';
+    mu.games.forEach(g => {
+      const au = stat(d, g.away, 'ups_score', 'ups_rank'), hu = stat(d, g.home, 'ups_score', 'ups_rank');
+      const ap = stat(d, g.away, 'apsplus_score', 'apsplus_rank'), hp = stat(d, g.home, 'apsplus_score', 'apsplus_rank');
+      const fu = favored(au, hu, g.away, g.home), fp = favored(ap, hp, g.away, g.home);
+      let chip;
+      if (fu && fp && fu === fp) chip = '<span class="chip agree">UPS &amp; APS+ both favor ' + fu + '</span>';
+      else if (fu && fp) chip = '<span class="chip split">Split: UPS favors ' + fu + ', APS+ favors ' + fp + '</span>';
+      else chip = '<span class="chip">Not enough data yet</span>';
+      const sp = spreadText(g);
+      const card = document.createElement('div');
+      card.className = 'match-card';
+      card.innerHTML =
+        '<div class="match-when">' + when(g) + '</div>' +
+        '<div class="match-teams">' + side(g.away, false) + '<span class="match-at">at</span>' + side(g.home, true) + '</div>' +
+        '<div class="match-rows">' +
+          '<div class="match-row">' + cell(au, fu === g.away, false) + '<div class="lab">UPS</div>' + cell(hu, fu === g.home, true) + '</div>' +
+          '<div class="match-row">' + cell(ap, fp === g.away, false) + '<div class="lab">APS+</div>' + cell(hp, fp === g.home, true) + '</div>' +
+        '</div>' +
+        '<div class="match-foot">' + chip + (sp ? '<span class="chip">' + sp + '</span>' : '') + '</div>';
+      gridEl.appendChild(card);
+    });
+    if (mu.byes && mu.byes.length) byeEl.textContent = 'On bye: ' + mu.byes.join(', ');
+  }
+  function show(yr, d) {
+    shownYear = yr; shownData = d;
+    headEl.style.display = muFailed ? 'none' : '';
+    if (muFailed) { noteEl.textContent = ''; gridEl.innerHTML = ''; byeEl.textContent = ''; return; }
+    if (!mu) { noteEl.textContent = 'Loading matchups…'; return; }
+    if (mu.season !== yr) {
+      gridEl.innerHTML = ''; byeEl.textContent = '';
+      noteEl.textContent = 'Matchups are available for the current season (' + mu.season + ') only.';
+      return;
+    }
+    if (!mu.games || !mu.games.length) { gridEl.innerHTML = ''; byeEl.textContent = ''; noteEl.textContent = 'No upcoming games.'; return; }
+    const lastWk = d.weeks && d.weeks.length ? d.weeks[d.weeks.length - 1] : null;
+    noteEl.textContent = 'Week ' + mu.week + ' (home team on the right). Scores are season-to-date through week ' + lastWk +
+      '; bold marks the higher score. “Favors” compares the two teams’ scores and ignores home field.';
+    render(yr, d);
+  }
+  window.nflMatchHook = show;
+  fetch('matchups.json?_=' + Date.now())
+    .then(r => { if (!r.ok) throw new Error('fetch failed: ' + r.status); return r.json(); })
+    .then(m => { mu = m; if (shownYear !== null) show(shownYear, shownData); })
+    .catch(() => { muFailed = true; if (shownYear !== null) show(shownYear, shownData); });
+})();
+
+// ===================================================================
+// NFL playoff outlook (division pies + conference-game bars)
+// Reads projections.json, written by the weekly NFL workflow (current season only).
+// ===================================================================
+(function initNflProjections() {
+  const headEl = document.getElementById('nflProjHead');
+  const noteEl = document.getElementById('nflProjNote');
+  const bodyEl = document.getElementById('nflProjBody');
+  const divGrid = document.getElementById('nflDivGrid');
+  const methodEl = document.getElementById('nflProjMethod');
+  const charts = [];
+  let proj = null;
+  let projFailed = false;
+  let shownYear = null;
+
+  function hexToRgb(h) {
+    const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(h || '');
+    return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [137, 135, 129];
+  }
+  function dist(a, b) {
+    return Math.sqrt((a[0]-b[0])**2 + (a[1]-b[1])**2 + (a[2]-b[2])**2);
+  }
+  // Pick a distinguishable color per team within one chart: primary, else secondary, else a fallback.
+  function pickColors(teams) {
+    const FALLBACK = ['#2a78d6', '#e0a526', '#2e9e6b', '#c0392b', '#7d5ba6', '#888888'];
+    const used = [];
+    return teams.map(t => {
+      const meta = NFL_TEAM_META[t] || { color: '#898781', color2: '#898781' };
+      const options = [meta.color, meta.color2].concat(FALLBACK);
+      for (const c of options) {
+        const rgb = hexToRgb(c);
+        if (used.every(u => dist(u, rgb) > 70)) { used.push(rgb); return c; }
+      }
+      used.push(hexToRgb(meta.color));
+      return meta.color;
+    });
+  }
+  function pct(p) {
+    const v = p * 100;
+    if (v >= 99.5) return '>99%';
+    if (v > 0 && v < 0.5) return '<1%';
+    return Math.round(v) + '%';
+  }
+  function clearCharts() { while (charts.length) charts.pop().destroy(); }
+
+  function renderAll() {
+    clearCharts();
+    divGrid.innerHTML = '';
+    Object.keys(proj.division).forEach(name => {
+      const rows = proj.division[name];
+      const colors = pickColors(rows.map(r => r.team));
+      const card = document.createElement('div');
+      card.className = 'pie-card';
+      const legend = rows.map((r, i) => {
+        const meta = NFL_TEAM_META[r.team] || {};
+        return '<li><span class="swatch" style="background:' + colors[i] + '"></span>' +
+          teamLogoImg(meta, 16) + '<span>' + r.team + '</span><span class="pct">' + pct(r.p) + '</span></li>';
+      }).join('');
+      card.innerHTML = '<div class="pie-title">' + name + '</div><div class="pie-wrap"><canvas role="img" aria-label="' +
+        name + ' winner odds"></canvas></div><ul class="pie-legend">' + legend + '</ul>';
+      divGrid.appendChild(card);
+      const c = new Chart(card.querySelector('canvas'), {
+        type: 'doughnut',
+        data: { labels: rows.map(r => r.team), datasets: [{ data: rows.map(r => Math.max(r.p * 100, 0.0001)),
+          backgroundColor: colors, borderColor: '#fff', borderWidth: 2 }] },
+        options: {
+          responsive: true, maintainAspectRatio: false, cutout: '48%',
+          plugins: { legend: { display: false },
+            tooltip: { callbacks: { label: (it) => it.label + ': ' + pct(rows[it.dataIndex].p) } } }
+        }
+      });
+      charts.push(c);
+    });
+
+    ['AFC', 'NFC'].forEach(conf => {
+      const rows = proj.conference[conf];
+      const colors = rows.map(r => (NFL_TEAM_META[r.team] || { color: '#898781' }).color);
+      const labelPlugin = {
+        id: 'pctLabels_' + conf,
+        afterDatasetsDraw(chart) {
+          const { ctx } = chart; const meta = chart.getDatasetMeta(0);
+          ctx.save(); ctx.font = '12px -apple-system, Segoe UI, Roboto, sans-serif'; ctx.fillStyle = '#333';
+          ctx.textBaseline = 'middle';
+          meta.data.forEach((bar, i) => { ctx.fillText(pct(rows[i].p), bar.x + 6, bar.y); });
+          ctx.restore();
+        }
+      };
+      const c = new Chart(document.getElementById('nflConf' + conf), {
+        type: 'bar',
+        data: { labels: rows.map(r => r.team), datasets: [{ data: rows.map(r => r.p * 100),
+          backgroundColor: colors, borderColor: 'rgba(0,0,0,0.15)', borderWidth: 1 }] },
+        options: {
+          indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+          layout: { padding: { right: 40 } },
+          plugins: { legend: { display: false },
+            tooltip: { callbacks: { label: (it) => pct(rows[it.dataIndex].p) + ' to reach the ' + conf + ' championship game' } } },
+          scales: {
+            x: { min: 0, max: 100, grid: { color: 'rgba(137,135,129,0.15)' },
+              ticks: { callback: (v) => v + '%' } },
+            y: { grid: { display: false }, ticks: { autoSkip: false } }
+          }
+        },
+        plugins: [labelPlugin]
+      });
+      charts.push(c);
+    });
+
+    methodEl.textContent = 'Estimate from ' + proj.n_sims.toLocaleString() + ' simulations of the remaining schedule' +
+      (proj.regular_season_complete ? ' (regular season complete; pre-playoff odds)' : '') +
+      ', using results-only team strengths: this season\'s opponent-adjusted UPS blended with last season\'s UPS. ' +
+      'Tiebreakers and playoff seeding are simplified.';
+  }
+
+  function show(yr) {
+    shownYear = yr;
+    headEl.style.display = projFailed ? 'none' : '';
+    if (projFailed) { noteEl.textContent = ''; bodyEl.style.display = 'none'; return; }
+    if (!proj) { noteEl.textContent = 'Loading playoff outlook…'; bodyEl.style.display = 'none'; return; }
+    if (proj.season !== yr) {
+      clearCharts();
+      bodyEl.style.display = 'none';
+      noteEl.textContent = 'Playoff odds are available for the current season (' + proj.season + ') only.';
+      return;
+    }
+    noteEl.textContent = 'Through week ' + proj.through_week + ', ' + proj.season + ' season. Updated ' + proj.asOf + '.';
+    bodyEl.style.display = 'block';
+    renderAll();
+  }
+
+  window.nflProjHook = show;
+  fetch('projections.json?_=' + Date.now())
+    .then(r => { if (!r.ok) throw new Error('fetch failed: ' + r.status); return r.json(); })
+    .then(d => { proj = d; if (shownYear !== null) show(shownYear); })
+    .catch(() => { projFailed = true; if (shownYear !== null) show(shownYear); });
 })();
 
 // ===================================================================
